@@ -14,6 +14,9 @@ cd /d "%SCRIPT_DIR%"
 :: JOSM Path
 set "JOSM_PATH=C:\Users\mirza.syazwan\AppData\Local\JOSM\JOSM.exe"
 
+:: GitHub Pages URL
+set "GITHUB_PAGES_URL=https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Edit-functions/"
+
 echo  [1/3] Checking JOSM...
 echo.
 
@@ -37,7 +40,6 @@ echo.
 echo  [2/3] Starting JOSM Helper...
 echo.
 
-:: Check if helper is already running
 netstat -ano 2>NUL | findstr ":8001 " | findstr "LISTENING" >NUL
 if %ERRORLEVEL% EQU 0 (
     echo        JOSM Helper already running [OK]
@@ -53,31 +55,19 @@ echo.
 echo  [3/3] Opening OSMAGIC...
 echo.
 
-:: Check if local server is running (for local development)
-netstat -ano 2>NUL | findstr ":8000 " | findstr "LISTENING" >NUL
-if %ERRORLEVEL% EQU 0 (
-    echo        Opening local version...
-    start "" "http://localhost:8000"
-) else (
-    echo        Opening GitHub Pages version...
-    echo        (Set your GitHub Pages URL below)
-    :: TODO: Replace with your actual GitHub Pages URL
-    start "" "http://localhost:8000"
-    echo.
-    echo        [!] To use online version, deploy to GitHub Pages
-    echo            and update the URL in this script.
-)
-
+echo        Opening: %GITHUB_PAGES_URL%
+start "" "%GITHUB_PAGES_URL%"
 echo        Done! [OK]
 
 echo.
 echo  ==========================================
 echo    OSMAGIC Ready!
 echo  ==========================================
-echo    JOSM Helper: http://localhost:8001
+echo    Online:  %GITHUB_PAGES_URL%
+echo    Helper:  http://localhost:8001
 echo.
-echo    The helper enables 'Export to JOSM' from
-echo    both local and online versions of OSMAGIC.
+echo    The helper enables 'Export to JOSM'
+echo    from the online version.
 echo  ==========================================
 echo.
 pause
