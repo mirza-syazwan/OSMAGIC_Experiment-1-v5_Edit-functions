@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSMAGIC | GPS Trace Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 0 40 40" fill="none">
+                        <!-- Folded map background -->
+                        <path d="M5 8 L15 5 L25 8 L35 5 L35 32 L25 35 L15 32 L5 35 Z" 
+                              fill="url(#mapGradient)" stroke="currentColor" stroke-width="1.5"/>
+                        <!-- Map fold lines -->
+                        <path d="M15 5 L15 32" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+                        <path d="M25 8 L25 35" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+                        <!-- Road lines on map -->
+                        <path d="M8 15 L22 15 M10 22 L20 22 M12 28 L18 28" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+                        <!-- Location pin - uses CSS variable via class -->
+                        <path class="logo-pin" d="M28 10 C24 10 21 13 21 17 C21 22 28 28 28 28 C28 28 35 22 35 17 C35 13 32 10 28 10 Z" 
+                              stroke="currentColor" stroke-width="1.5"/>
+                        <circle class="logo-pin-inner" cx="28" cy="17" r="3"/>
+                        <!-- Gradient definition -->
+                        <defs>
+                            <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop class="gradient-start" offset="0%" style="stop-opacity:0.3"/>
+                                <stop class="gradient-end" offset="100%" style="stop-opacity:0.2"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <span class="logo-text">OSMAGIC</span>
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">
+                        <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
+                    <span class="version-badge">v2.0</span>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="sidebar-section">
+                <div class="section-label">Import</div>
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".geojson,.json,.gpx,.csv" multiple />
+                    <label for="fileInput" class="upload-label">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span class="upload-text">Drop files or click to browse</span>
+                        <span class="upload-formats">GeoJSON • GPX • CSV</span>
+                    </label>
+                </div>
+                <div class="file-status" id="fileInfo"></div>
+            </div>
+
+            <!-- Stats Section -->
+            <div class="sidebar-section">
+                <div class="section-label">Statistics</div>
+                <div class="stats-grid" id="summaryInfo">
+                    <div class="stat-card">
+                        <span class="stat-value" id="statTotal">0</span>
+                        <span class="stat-label">Total</span>
+                    </div>
+                    <div class="stat-card stat-active">
+                        <span class="stat-value" id="statActive">0</span>
+                        <span class="stat-label">Active</span>
+                    </div>
+                    <div class="stat-card stat-done">
+                        <span class="stat-value" id="statDone">0</span>
+                        <span class="stat-label">Done</span>
+                    </div>
+                    <div class="stat-card stat-skipped">
+                        <span class="stat-value" id="statSkipped">0</span>
+                        <span class="stat-label">Skipped</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="sidebar-section">
+                <div class="section-label">Filter</div>
+                <div class="filter-tabs">
+                    <button class="filter-tab active" data-view="all" onclick="taskManager.switchView('all')">
+                        <span class="tab-icon">◉</span> All
+                    </button>
+                    <button class="filter-tab" data-view="active" onclick="taskManager.switchView('active')">
+                        <span class="tab-icon">◎</span> Active
+                    </button>
+                    <button class="filter-tab" data-view="done" onclick="taskManager.switchView('done')">
+                        <span class="tab-icon">✓</span> Done
+                    </button>
+                    <button class="filter-tab" data-view="skipped" onclick="taskManager.switchView('skipped')">
+                        <span class="tab-icon">⊘</span> Skipped
+                    </button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="sidebar-footer">
+                <button class="btn-danger" onclick="taskManager.clearAllData()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Clear All Data
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="main-header">
+                <div class="header-left">
+                    <h1 class="page-title">Sequences</h1>
+                    <span class="task-counter" id="taskCounter"></span>
+                </div>
+                <div class="header-controls">
+                    <button id="prevBtn" class="nav-btn" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        Previous
+                    </button>
+                    <button id="nextBtn" class="nav-btn" disabled>
+                        Next
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Task Display Area -->
+            <div class="task-display" id="taskDisplay">
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="8" y="16" width="48" height="40" rx="4"/>
+                            <path d="M8 28h48"/>
+                            <circle cx="32" cy="42" r="8"/>
+                            <path d="M32 38v8M28 42h8"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-title">No sequences loaded</h2>
+                    <p class="empty-text">Upload GPS trace files to get started</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="modal" onclick="if(event.target.id === 'previewModal') taskManager.closePreview()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h2 class="modal-title">Edit Sequence</h2>
+                    <span class="modal-sequence-id" id="previewSequenceId"></span>
+                </div>
+                <button class="modal-close" onclick="taskManager.closePreview()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Workflow Panel -->
+                <div id="workflowPanel" class="workflow-panel">
+                    <div class="workflow-steps">
+                        <div class="workflow-step active" id="workflowStep1" data-step="preview">
+                            <div class="step-indicator">
+                                <span class="step-number">1</span>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Preview</span>
+                                <span class="step-desc">Review trace</span>
+                            </div>
+                            <div class="step-status">✓</div>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="workflow-step" id="workflowStep2" data-step="edit">
+                            <div class="step-indicator">
+                                <span class="step-number">2</span>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Edit</span>
+                                <span class="step-desc">Simplify geometry</span>
+                            </div>
+                            <div class="step-status"></div>
+                            <button class="step-action-btn" onclick="taskManager.startWorkflowStep('edit')">Start</button>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="workflow-step" id="workflowStep3" data-step="split">
+                            <div class="step-indicator">
+                                <span class="step-number">3</span>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Split</span>
+                                <span class="step-desc">Divide ways</span>
+                            </div>
+                            <div class="step-status"></div>
+                            <button class="step-action-btn" onclick="taskManager.startWorkflowStep('split')" disabled>Start</button>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="workflow-step" id="workflowStep4" data-step="tag">
+                            <div class="step-indicator">
+                                <span class="step-number">4</span>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Tag</span>
+                                <span class="step-desc">Set properties</span>
+                            </div>
+                            <div class="step-status"></div>
+                            <button class="step-action-btn" onclick="taskManager.startWorkflowStep('tag')" disabled>Start</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div id="previewMap" class="preview-map"></div>
+
+                <!-- Edit Controls -->
+                <div class="edit-controls">
+                    <div class="control-group">
+                        <button id="toggleEditModeBtn" class="control-btn" onclick="taskManager.toggleEditMode()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Edit Mode
+                        </button>
+                        <button id="undoBtn" class="control-btn" onclick="taskManager.undo()" style="display: none;" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <polyline points="1 4 1 10 7 10"/>
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                            </svg>
+                            Undo
+                        </button>
+                        <button id="redoBtn" class="control-btn" onclick="taskManager.redo()" style="display: none;" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                            Redo
+                        </button>
+                        <button id="simplifyBtn" class="control-btn" onclick="taskManager.simplifyGeometry()" style="display: none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                            Simplify
+                        </button>
+                        <input type="number" id="toleranceInput" class="tolerance-input" placeholder="Tolerance (m)" value="5" min="0.1" step="0.1" style="display: none;">
+                        <button id="splitWayBtn" class="control-btn" onclick="taskManager.toggleSplitMode()" style="display: none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <line x1="12" y1="2" x2="12" y2="22"/>
+                                <path d="M8 6l-4 4 4 4M16 6l4 4-4 4"/>
+                            </svg>
+                            Split Way
+                        </button>
+                    </div>
+
+                    <div class="control-group">
+                        <button class="control-btn btn-export" onclick="taskManager.exportFromPreview()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Export to JOSM
+                        </button>
+                        <button class="control-btn btn-secondary" onclick="taskManager.closePreview()">Close</button>
+                    </div>
+                </div>
+
+                <!-- Selection Info -->
+                <div id="selectionInfo" class="selection-info" style="display: none;">
+                    No selection
+                </div>
+
+                <!-- Tag Editor Panel -->
+                <div id="tagEditorPanel" class="tag-editor" style="display: none;">
+                    <div class="tag-editor-header">
+                        <h4>Way Properties</h4>
+                        <span id="selectedWayInfo" class="selected-way-badge">No way selected</span>
+                    </div>
+                    <div class="tag-editor-body">
+                        <div class="tag-field">
+                            <label>highway</label>
+                            <select id="highwaySelect" onchange="taskManager.updateSelectedWayTag('highway', this.value)">
+                                <option value="unclassified">unclassified</option>
+                                <option value="residential">residential</option>
+                                <option value="service">service</option>
+                                <option value="driveway">driveway</option>
+                                <option value="track">track</option>
+                                <option value="path">path</option>
+                                <option value="footway">footway</option>
+                                <option value="cycleway">cycleway</option>
+                                <option value="primary">primary</option>
+                                <option value="secondary">secondary</option>
+                                <option value="tertiary">tertiary</option>
+                                <option value="trunk">trunk</option>
+                                <option value="motorway">motorway</option>
+                            </select>
+                        </div>
+                        <div class="tag-field">
+                            <label>oneway</label>
+                            <select id="onewaySelect" onchange="taskManager.updateSelectedWayTag('oneway', this.value)">
+                                <option value="">No (Two-way)</option>
+                                <option value="yes">Yes (Forward)</option>
+                                <option value="-1">-1 (Backward)</option>
+                            </select>
+                        </div>
+                        <button id="splitWayBtnMain" class="control-btn full-width" onclick="taskManager.toggleSplitMode()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <line x1="12" y1="2" x2="12" y2="22"/>
+                                <path d="M8 6l-4 4 4 4M16 6l4 4-4 4"/>
+                            </svg>
+                            Split Way
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="storage.js"></script>
+    <script src="app.js"></script>
+    
+    <!-- Theme Toggle Script -->
+    <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('osmagic-theme', newTheme);
+            
+            // Update logo gradient colors dynamically (since CSS variables in SVG stop-color don't work everywhere)
+            updateLogoColors(newTheme);
+        }
+        
+        function updateLogoColors(theme) {
+            const gradientStart = document.querySelector('.gradient-start');
+            const gradientEnd = document.querySelector('.gradient-end');
+            
+            if (theme === 'dark') {
+                if (gradientStart) gradientStart.style.stopColor = '#d97706';
+                if (gradientEnd) gradientEnd.style.stopColor = '#fbbf24';
+            } else {
+                if (gradientStart) gradientStart.style.stopColor = '#0ea5e9';
+                if (gradientEnd) gradientEnd.style.stopColor = '#06b6d4';
+            }
+        }
+        
+        // Initialize theme from localStorage
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('osmagic-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // Apply logo colors on load
+            document.addEventListener('DOMContentLoaded', () => {
+                updateLogoColors(savedTheme);
+            });
+        })();
+    </script>
+</body>
+</html>
