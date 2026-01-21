@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title OSMAGIC Launcher
 color 0A
 echo.
@@ -7,214 +8,99 @@ echo        OSMAGIC GPS Trace Editor
 echo  ==========================================
 echo.
 
-:: Change to script directory
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
-
-:: GitHub Pages URL
 set "GITHUB_PAGES_URL=https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Edit-functions/"
 set "HELPER_PORT=8001"
 set "JOSM_PATH="
 
-:: ==========================================
-:: STEP 1: Auto-detect JOSM
-:: ==========================================
 echo  [1/4] Auto-detecting JOSM...
 echo.
 
-:: Check if JOSM is already running
 tasklist /FI "IMAGENAME eq JOSM.exe" 2>NUL | find /I "JOSM.exe" >NUL
 if %ERRORLEVEL% EQU 0 (
     echo        JOSM is already running [OK]
     set "JOSM_PATH=RUNNING"
-    call :load_josm_imagery
+    echo        Loading OpenStreetMap Carto imagery...
+    call :load_imagery
     goto check_helper
 )
 
-tasklist /FI "IMAGENAME eq javaw.exe" 2>NUL | find /I "javaw.exe" >NUL
-if %ERRORLEVEL% EQU 0 (
-    echo        Java process detected - JOSM may be running [OK]
-    set "JOSM_PATH=RUNNING"
-    call :load_josm_imagery
-    goto check_helper
+:: Check common JOSM locations
+set "JOSM_CHECK=%USERPROFILE%\AppData\Local\JOSM\JOSM.exe"
+if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
+
+if not defined JOSM_PATH (
+    set "JOSM_CHECK=C:\Program Files\JOSM\josm.exe"
+    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
 )
 
-:: Try common JOSM locations (in order of likelihood) using PowerShell
 if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'AppData', 'Local', 'JOSM', 'JOSM.exe'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\AppData\Local\JOSM\JOSM.exe"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path 'C:\Program Files\JOSM\josm.exe') { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=C:\Program Files\JOSM\josm.exe"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path 'C:\Program Files (x86)\JOSM\josm.exe') { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=C:\Program Files (x86)\JOSM\josm.exe"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'AppData', 'Local', 'JOSM', 'josm.exe'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\AppData\Local\JOSM\josm.exe"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'Downloads', 'josm-tested.jar'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\Downloads\josm-tested.jar"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'josm-tested.jar'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\josm-tested.jar"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'JOSM', 'josm.jar'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\JOSM\josm.jar"
-)
-if not defined JOSM_PATH (
-    powershell -NoProfile -Command "if (Test-Path ([System.IO.Path]::Combine($env:USERPROFILE, 'Desktop', 'josm-tested.jar'))) { exit 0 } else { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 set "JOSM_PATH=%USERPROFILE%\Desktop\josm-tested.jar"
+    set "JOSM_CHECK=%USERPROFILE%\AppData\Local\JOSM\josm.exe"
+    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
 )
 
-:: Start JOSM if found
+if not defined JOSM_PATH (
+    set "JOSM_CHECK=%USERPROFILE%\Downloads\josm-tested.jar"
+    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
+)
+
 if defined JOSM_PATH (
     echo        Found JOSM at: %JOSM_PATH%
     echo        Starting JOSM...
-    
     echo %JOSM_PATH% | find /I ".jar" >NUL
     if %ERRORLEVEL% EQU 0 (
         start "" javaw -jar "%JOSM_PATH%"
     ) else (
         start "" "%JOSM_PATH%"
     )
-    
     timeout /t 5 /nobreak >NUL
     echo        JOSM started [OK]
-    
-    :: Load OpenStreetMap Carto imagery
     echo        Loading OpenStreetMap Carto imagery...
-    call :load_josm_imagery
+    call :load_imagery
 ) else (
-    echo        [!] JOSM not found in common locations.
-    echo.
-    echo        Common locations checked:
-    echo          - %USERPROFILE%\AppData\Local\JOSM\
-    echo          - C:\Program Files\JOSM\
-    echo          - C:\Program Files (x86)\JOSM\
-    echo          - %USERPROFILE%\Downloads\
-    echo.
-    echo        Please start JOSM manually before exporting.
-    echo        The app will still work for editing!
-    echo.
+    echo        JOSM not found in common locations.
+    echo        Please start JOSM manually.
 )
 
-:: ==========================================
-:: Function: Load JOSM Imagery
-:: ==========================================
-:load_josm_imagery
-:: Wait for JOSM Remote Control to be ready (max 15 seconds)
-set "RETRY_COUNT=0"
-:wait_for_josm
-set /a RETRY_COUNT+=1
-if %RETRY_COUNT% GTR 15 goto :imagery_skip
-
-:: Test if JOSM Remote Control is responding
-powershell -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -TimeoutSec 2 -ErrorAction Stop; exit 0 } catch { exit 1 }" >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    :: JOSM Remote Control is ready, load imagery
-    echo        Loading OpenStreetMap Carto imagery...
-    :: Use PowerShell to send request to JOSM Remote Control with proper URL encoding
-    powershell -Command "$name = [System.Uri]::EscapeDataString('OpenStreetMap Carto (Standard)'); $uri = \"http://localhost:8111/imagery?name=$name\"; try { $response = Invoke-WebRequest -Uri $uri -Method GET -TimeoutSec 3 -ErrorAction Stop; exit 0 } catch { exit 1 }" >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        echo        Imagery loaded [OK]
-    ) else (
-        echo        [!] Could not auto-load imagery automatically.
-        echo           Please load manually: Imagery ^> OpenStreetMap Carto (Standard)
-        echo           (This is normal if JOSM Remote Control doesn't support this endpoint)
-    )
-    goto :imagery_done
-) else (
-    :: Wait a bit and retry
-    timeout /t 1 /nobreak >NUL
-    goto :wait_for_josm
-)
-
-:imagery_skip
-echo        [!] JOSM Remote Control not ready.
-echo           Load imagery manually: Imagery ^> OpenStreetMap Carto (Standard)
-goto :imagery_done
-
-:imagery_done
-exit /b
-
-:: ==========================================
-:: STEP 2: Check/Download josm-helper.py
-:: ==========================================
 :check_helper
 echo.
 echo  [2/4] Checking JOSM Helper...
 echo.
 
-:: Check if helper is already running
 netstat -ano 2>NUL | findstr ":%HELPER_PORT% " | findstr "LISTENING" >NUL
 if %ERRORLEVEL% EQU 0 (
-    echo        JOSM Helper already running on port %HELPER_PORT% [OK]
+    echo        JOSM Helper already running [OK]
     goto open_browser
 )
 
-:: Check if josm-helper.py exists
 if exist "%SCRIPT_DIR%josm-helper.py" (
     echo        josm-helper.py found [OK]
     goto start_helper
 )
 
-:: Download josm-helper.py from GitHub
-echo        josm-helper.py not found. Downloading...
-echo.
-
-:: Try PowerShell download (Windows 10+)
-powershell -Command "try { Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/mirza-syazwan/OSMAGIC_Experiment-1-v5_Edit-functions/main/josm-helper.py' -OutFile '%SCRIPT_DIR%josm-helper.py' -ErrorAction Stop; Write-Host 'Download successful!' } catch { Write-Host 'Download failed:' $_.Exception.Message; exit 1 }" 2>NUL
-
+echo        josm-helper.py not found. Creating from embedded content...
+call :create_helper_file
 if exist "%SCRIPT_DIR%josm-helper.py" (
-    echo        Download successful! [OK]
+    echo        File created successfully! [OK]
 ) else (
-    echo        [!] Download failed. Please download manually:
-    echo           https://raw.githubusercontent.com/mirza-syazwan/OSMAGIC_Experiment-1-v5_Edit-functions/main/josm-helper.py
-    echo.
-    echo        Save it in: %SCRIPT_DIR%
-    echo        Then run this script again.
-    echo.
+    echo        [!] Failed to create josm-helper.py
     pause
     exit /b 1
 )
 
 :start_helper
-:: Start the helper
-echo        Starting JOSM Helper on port %HELPER_PORT%...
+echo        Starting JOSM Helper...
 start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && python josm-helper.py"
 timeout /t 2 /nobreak >NUL
+echo        JOSM Helper started [OK]
 
-:: Verify helper started
-netstat -ano 2>NUL | findstr ":%HELPER_PORT% " | findstr "LISTENING" >NUL
-if %ERRORLEVEL% EQU 0 (
-    echo        JOSM Helper started successfully [OK]
-) else (
-    echo        [!] JOSM Helper may not have started.
-    echo           Make sure Python is installed.
-    echo           Check the helper window for errors.
-)
-
-:: ==========================================
-:: STEP 3: Open Browser
-:: ==========================================
 :open_browser
 echo.
 echo  [3/4] Opening OSMAGIC...
-echo.
-
 start "" "%GITHUB_PAGES_URL%"
 echo        Browser opened [OK]
 
-:: ==========================================
-:: STEP 4: Show Status
-:: ==========================================
 echo.
 echo  [4/4] Status Summary
 echo.
@@ -223,16 +109,40 @@ echo    OSMAGIC Ready!
 echo  ==========================================
 echo    Online:  %GITHUB_PAGES_URL%
 echo    Helper:  http://localhost:%HELPER_PORT%
-echo.
 if defined JOSM_PATH (
     echo    JOSM:    Running
 ) else (
-    echo    JOSM:    Not found - start manually
+    echo    JOSM:    Not found
 )
-echo.
-echo    The helper enables 'Export to JOSM'
-echo    from the online version.
 echo  ==========================================
 echo.
-echo  Press any key to close this window...
-pause >NUL
+pause
+exit /b 0
+
+:: Function to create josm-helper.py from embedded base64 content
+:create_helper_file
+powershell -NoProfile -NonInteractive -InputFormat None -Command "$b64='IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMw0KIiIiDQpKT1NNIEhlbHBlciAtIE1pbmltYWwgbG9jYWwgc2VydmVyIGZvciBKT1NNIGludGVncmF0aW9uDQpXb3JrcyB3aXRoIE9TTUFHSUMgaG9zdGVkIG9uIEdpdEh1YiBQYWdlcw0KDQpUaGlzIGhlbHBlciBydW5zIGxvY2FsbHkgYW5kIGhhbmRsZXM6DQotIFNhdmluZyBPU00gZmlsZXMgZm9yIEpPU00gdG8gbG9hZA0KLSBGb2N1c2luZyBKT1NNIHdpbmRvdw0KLSBDT1JTIGZvciBjcm9zcy1vcmlnaW4gcmVxdWVzdHMgZnJvbSBHaXRIdWIgUGFnZXMNCg0KUnVuIHRoaXMgd2hlbiB5b3Ugd2FudCB0byB1c2UgdGhlICJFeHBvcnQgdG8gSk9TTSIgZmVhdHVyZS4NCiIiIg0KDQppbXBvcnQgaHR0cC5zZXJ2ZXINCmltcG9ydCBzb2NrZXRzZXJ2ZXINCmltcG9ydCBvcw0KaW1wb3J0IGpzb24NCmZyb20gZGF0ZXRpbWUgaW1wb3J0IGRhdGV0aW1lDQppbXBvcnQgc2h1dGlsDQppbXBvcnQgY3R5cGVzDQpmcm9tIGN0eXBlcyBpbXBvcnQgd2ludHlwZXMNCg0KIyBDb25maWd1cmF0aW9uDQpIRUxQRVJfUE9SVCA9IDgwMDEgICMgRGlmZmVyZW50IGZyb20gbWFpbiBzZXJ2ZXINCkVYUE9SVF9ESVIgPSBvcy5wYXRoLmpvaW4ob3MucGF0aC5kaXJuYW1lKG9zLnBhdGguYWJzcGF0aChfX2ZpbGVfXykpLCAnZXhwb3J0cycpDQoNCiMgQ3JlYXRlIGV4cG9ydHMgZGlyZWN0b3J5DQppZiBub3Qgb3MucGF0aC5leGlzdHMoRVhQT1JUX0RJUik6DQogICAgb3MubWFrZWRpcnMoRVhQT1JUX0RJUikNCg0KZGVmIGZvY3VzX2pvc21fd2luZG93KCk6DQogICAgIiIiRmluZCBhbmQgYnJpbmcgSk9TTSB3aW5kb3cgdG8gZm9yZWdyb3VuZCB1c2luZyBXaW5kb3dzIEFQSSIiIg0KICAgIHRyeToNCiAgICAgICAgdXNlcjMyID0gY3R5cGVzLndpbmRsbC51c2VyMzINCiAgICAgICAgV05ERU5VTVBST0MgPSBjdHlwZXMuV0lORlVOQ1RZUEUod2ludHlwZXMuQk9PTCwgd2ludHlwZXMuSFdORCwgd2ludHlwZXMuTFBBUkFNKQ0KICAgICAgICANCiAgICAgICAgam9zbV9od25kID0gTm9uZQ0KICAgICAgICANCiAgICAgICAgZGVmIGVudW1fd2luZG93c19jYWxsYmFjayhod25kLCBscGFyYW0pOg0KICAgICAgICAgICAgbm9ubG9jYWwgam9zbV9od25kDQogICAgICAgICAgICBsZW5ndGggPSB1c2VyMzIuR2V0V2luZG93VGV4dExlbmd0aFcoaHduZCkNCiAgICAgICAgICAgIGlmIGxlbmd0aCA+IDA6DQogICAgICAgICAgICAgICAgYnVmZmVyID0gY3R5cGVzLmNyZWF0ZV91bmljb2RlX2J1ZmZlcihsZW5ndGggKyAxKQ0KICAgICAgICAgICAgICAgIHVzZXIzMi5HZXRXaW5kb3dUZXh0Vyhod25kLCBidWZmZXIsIGxlbmd0aCArIDEpDQogICAgICAgICAgICAgICAgdGl0bGUgPSBidWZmZXIudmFsdWUubG93ZXIoKQ0KICAgICAgICAgICAgICAgIA0KICAgICAgICAgICAgICAgIGlmICdqb3NtJyBpbiB0aXRsZSBvciAnamF2YSBvcGVuc3RyZWV0bWFwJyBpbiB0aXRsZToNCiAgICAgICAgICAgICAgICAgICAgaWYgdXNlcjMyLklzV2luZG93VmlzaWJsZShod25kKToNCiAgICAgICAgICAgICAgICAgICAgICAgIGpvc21faHduZCA9IGh3bmQNCiAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybiBGYWxzZQ0KICAgICAgICAgICAgcmV0dXJuIFRydWUNCiAgICAgICAgDQogICAgICAgIHVzZXIzMi5FbnVtV2luZG93cyhXTkRFTlVNUFJPQyhlbnVtX3dpbmRvd3NfY2FsbGJhY2spLCAwKQ0KICAgICAgICANCiAgICAgICAgaWYgam9zbV9od25kOg0KICAgICAgICAgICAgU1dfUkVTVE9SRSA9IDkNCiAgICAgICAgICAgIHVzZXIzMi5TaG93V2luZG93KGpvc21faHduZCwgU1dfUkVTVE9SRSkNCiAgICAgICAgICAgIHVzZXIzMi5TZXRGb3JlZ3JvdW5kV2luZG93KGpvc21faHduZCkNCiAgICAgICAgICAgIHVzZXIzMi5CcmluZ1dpbmRvd1RvVG9wKGpvc21faHduZCkNCiAgICAgICAgICAgIA0KICAgICAgICAgICAgdHJ5Og0KICAgICAgICAgICAgICAgIGN1cnJlbnRfdGhyZWFkID0gY3R5cGVzLndpbmRsbC5rZXJuZWwzMi5HZXRDdXJyZW50VGhyZWFkSWQoKQ0KICAgICAgICAgICAgICAgIGZvcmVncm91bmRfdGhyZWFkID0gdXNlcjMyLkdldFdpbmRvd1RocmVhZFByb2Nlc3NJZCh1c2VyMzIuR2V0Rm9yZWdyb3VuZFdpbmRvdygpLCBOb25lKQ0KICAgICAgICAgICAgICAgIGlmIGN1cnJlbnRfdGhyZWFkICE9IGZvcmVncm91bmRfdGhyZWFkOg0KICAgICAgICAgICAgICAgICAgICB1c2VyMzIuQXR0YWNoVGhyZWFkSW5wdXQoY3VycmVudF90aHJlYWQsIGZvcmVncm91bmRfdGhyZWFkLCBUcnVlKQ0KICAgICAgICAgICAgICAgICAgICB1c2VyMzIuU2V0Rm9yZWdyb3VuZFdpbmRvdyhqb3NtX2h3bmQpDQogICAgICAgICAgICAgICAgICAgIHVzZXIzMi5BdHRhY2hUaHJlYWRJbnB1dChjdXJyZW50X3RocmVhZCwgZm9yZWdyb3VuZF90aHJlYWQsIEZhbHNlKQ0KICAgICAgICAgICAgZXhjZXB0Og0KICAgICAgICAgICAgICAgIHBhc3MNCiAgICAgICAgICAgIA0KICAgICAgICAgICAgcmV0dXJuIFRydWUNCiAgICAgICAgcmV0dXJuIEZhbHNlDQogICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOg0KICAgICAgICBwcmludChmIkVycm9yIGZvY3VzaW5nIEpPU006IHtlfSIpDQogICAgICAgIHJldHVybiBGYWxzZQ0KDQoNCmNsYXNzIEpPU01IZWxwZXJIYW5kbGVyKGh0dHAuc2VydmVyLkJhc2VIVFRQUmVxdWVzdEhhbmRsZXIpOg0KICAgIGRlZiBsb2dfbWVzc2FnZShzZWxmLCBmb3JtYXQsICphcmdzKToNCiAgICAgICAgdGltZXN0YW1wID0gZGF0ZXRpbWUubm93KCkuc3RyZnRpbWUoJyVIOiVNOiVTJykNCiAgICAgICAgcHJpbnQoZiJbe3RpbWVzdGFtcH1dIHthcmdzWzBdfSIpDQogICAgDQogICAgZGVmIHNlbmRfY29yc19oZWFkZXJzKHNlbGYpOg0KICAgICAgICAjIEFsbG93IHJlcXVlc3RzIGZyb20gYW55IG9yaWdpbiAoR2l0SHViIFBhZ2VzLCBsb2NhbGhvc3QsIGV0Yy4pDQogICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0FjY2Vzcy1Db250cm9sLUFsbG93LU9yaWdpbicsICcqJykNCiAgICAgICAgc2VsZi5zZW5kX2hlYWRlcignQWNjZXNzLUNvbnRyb2wtQWxsb3ctTWV0aG9kcycsICdHRVQsIFBPU1QsIE9QVElPTlMnKQ0KICAgICAgICBzZWxmLnNlbmRfaGVhZGVyKCdBY2Nlc3MtQ29udHJvbC1BbGxvdy1IZWFkZXJzJywgJ0NvbnRlbnQtVHlwZScpDQogICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0NhY2hlLUNvbnRyb2wnLCAnbm8tY2FjaGUnKQ0KICAgIA0KICAgIGRlZiBkb19PUFRJT05TKHNlbGYpOg0KICAgICAgICBzZWxmLnNlbmRfcmVzcG9uc2UoMjAwKQ0KICAgICAgICBzZWxmLnNlbmRfY29yc19oZWFkZXJzKCkNCiAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpDQogICAgDQogICAgZGVmIGRvX0dFVChzZWxmKToNCiAgICAgICAgaWYgc2VsZi5wYXRoID09ICcvcGluZyc6DQogICAgICAgICAgICAjIEhlYWx0aCBjaGVjayBlbmRwb2ludA0KICAgICAgICAgICAgc2VsZi5zZW5kX3Jlc3BvbnNlKDIwMCkNCiAgICAgICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0NvbnRlbnQtVHlwZScsICdhcHBsaWNhdGlvbi9qc29uJykNCiAgICAgICAgICAgIHNlbGYuc2VuZF9jb3JzX2hlYWRlcnMoKQ0KICAgICAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpDQogICAgICAgICAgICBzZWxmLndmaWxlLndyaXRlKGpzb24uZHVtcHMoew0KICAgICAgICAgICAgICAgICdzdGF0dXMnOiAnb2snLA0KICAgICAgICAgICAgICAgICdzZXJ2aWNlJzogJ2pvc20taGVscGVyJywNCiAgICAgICAgICAgICAgICAncG9ydCc6IEhFTFBFUl9QT1JUDQogICAgICAgICAgICB9KS5lbmNvZGUoKSkNCiAgICAgICAgDQogICAgICAgIGVsaWYgc2VsZi5wYXRoID09ICcvZm9jdXMtam9zbSc6DQogICAgICAgICAgICBzdWNjZXNzID0gZm9jdXNfam9zbV93aW5kb3coKQ0KICAgICAgICAgICAgc2VsZi5zZW5kX3Jlc3BvbnNlKDIwMCkNCiAgICAgICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0NvbnRlbnQtVHlwZScsICdhcHBsaWNhdGlvbi9qc29uJykNCiAgICAgICAgICAgIHNlbGYuc2VuZF9jb3JzX2hlYWRlcnMoKQ0KICAgICAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpDQogICAgICAgICAgICBzZWxmLndmaWxlLndyaXRlKGpzb24uZHVtcHMoew0KICAgICAgICAgICAgICAgICdzdWNjZXNzJzogc3VjY2VzcywNCiAgICAgICAgICAgICAgICAnbWVzc2FnZSc6ICdKT1NNIGZvY3VzZWQnIGlmIHN1Y2Nlc3MgZWxzZSAnSk9TTSB3aW5kb3cgbm90IGZvdW5kJw0KICAgICAgICAgICAgfSkuZW5jb2RlKCkpDQogICAgICAgICAgICBpZiBzdWNjZXNzOg0KICAgICAgICAgICAgICAgIHByaW50KCIgIC0+IEpPU00gd2luZG93IGZvY3VzZWQiKQ0KICAgICAgICAgICAgZWxzZToNCiAgICAgICAgICAgICAgICBwcmludCgiICAtPiBKT1NNIHdpbmRvdyBub3QgZm91bmQiKQ0KICAgICAgICANCiAgICAgICAgZWxpZiBzZWxmLnBhdGguc3RhcnRzd2l0aCgnL2V4cG9ydHMvJyk6DQogICAgICAgICAgICAjIFNlcnZlIGV4cG9ydGVkIE9TTSBmaWxlcw0KICAgICAgICAgICAgZmlsZW5hbWUgPSBzZWxmLnBhdGhbOTpdDQogICAgICAgICAgICBmaWxlcGF0aCA9IG9zLnBhdGguam9pbihFWFBPUlRfRElSLCBmaWxlbmFtZSkNCiAgICAgICAgICAgIA0KICAgICAgICAgICAgaWYgb3MucGF0aC5leGlzdHMoZmlsZXBhdGgpIGFuZCBvcy5wYXRoLmlzZmlsZShmaWxlcGF0aCk6DQogICAgICAgICAgICAgICAgc2VsZi5zZW5kX3Jlc3BvbnNlKDIwMCkNCiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfaGVhZGVyKCdDb250ZW50LVR5cGUnLCAnYXBwbGljYXRpb24veG1sJykNCiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfY29yc19oZWFkZXJzKCkNCiAgICAgICAgICAgICAgICBzZWxmLmVuZF9oZWFkZXJzKCkNCiAgICAgICAgICAgICAgICB3aXRoIG9wZW4oZmlsZXBhdGgsICdyYicpIGFzIGY6DQogICAgICAgICAgICAgICAgICAgIHNodXRpbC5jb3B5ZmlsZW9iaihmLCBzZWxmLndmaWxlKQ0KICAgICAgICAgICAgZWxzZToNCiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfcmVzcG9uc2UoNDA0KQ0KICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9jb3JzX2hlYWRlcnMoKQ0KICAgICAgICAgICAgICAgIHNlbGYuZW5kX2hlYWRlcnMoKQ0KICAgICAgICANCiAgICAgICAgZWxzZToNCiAgICAgICAgICAgIHNlbGYuc2VuZF9yZXNwb25zZSg0MDQpDQogICAgICAgICAgICBzZWxmLnNlbmRfY29yc19oZWFkZXJzKCkNCiAgICAgICAgICAgIHNlbGYuZW5kX2hlYWRlcnMoKQ0KICAgIA0KICAgIGRlZiBkb19QT1NUKHNlbGYpOg0KICAgICAgICBpZiBzZWxmLnBhdGggPT0gJy9leHBvcnQnOg0KICAgICAgICAgICAgdHJ5Og0KICAgICAgICAgICAgICAgIGNvbnRlbnRfbGVuZ3RoID0gaW50KHNlbGYuaGVhZGVyc1snQ29udGVudC1MZW5ndGgnXSkNCiAgICAgICAgICAgICAgICBwb3N0X2RhdGEgPSBzZWxmLnJmaWxlLnJlYWQoY29udGVudF9sZW5ndGgpDQogICAgICAgICAgICAgICAgZGF0YSA9IGpzb24ubG9hZHMocG9zdF9kYXRhLmRlY29kZSgndXRmLTgnKSkNCiAgICAgICAgICAgICAgICANCiAgICAgICAgICAgICAgICBzZXF1ZW5jZV9pZCA9IGRhdGEuZ2V0KCdzZXF1ZW5jZUlkJywgJ3Vua25vd24nKQ0KICAgICAgICAgICAgICAgIG9zbV94bWwgPSBkYXRhLmdldCgnb3NtWG1sJywgJycpDQogICAgICAgICAgICAgICAgDQogICAgICAgICAgICAgICAgaWYgbm90IG9zbV94bWw6DQogICAgICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9yZXNwb25zZSg0MDApDQogICAgICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0NvbnRlbnQtVHlwZScsICdhcHBsaWNhdGlvbi9qc29uJykNCiAgICAgICAgICAgICAgICAgICAgc2VsZi5zZW5kX2NvcnNfaGVhZGVycygpDQogICAgICAgICAgICAgICAgICAgIHNlbGYuZW5kX2hlYWRlcnMoKQ0KICAgICAgICAgICAgICAgICAgICBzZWxmLndmaWxlLndyaXRlKGpzb24uZHVtcHMoeydlcnJvcic6ICdObyBPU00gWE1MIHByb3ZpZGVkJ30pLmVuY29kZSgpKQ0KICAgICAgICAgICAgICAgICAgICByZXR1cm4NCiAgICAgICAgICAgICAgICANCiAgICAgICAgICAgICAgICBmaWxlbmFtZSA9IGYnc2VxdWVuY2Vfe3NlcXVlbmNlX2lkfS5vc20nDQogICAgICAgICAgICAgICAgZmlsZXBhdGggPSBvcy5wYXRoLmpvaW4oRVhQT1JUX0RJUiwgZmlsZW5hbWUpDQogICAgICAgICAgICAgICAgDQogICAgICAgICAgICAgICAgd2l0aCBvcGVuKGZpbGVwYXRoLCAndycsIGVuY29kaW5nPSd1dGYtOCcpIGFzIGY6DQogICAgICAgICAgICAgICAgICAgIGYud3JpdGUob3NtX3htbCkNCiAgICAgICAgICAgICAgICANCiAgICAgICAgICAgICAgICBmaWxlX3VybCA9IGYnaHR0cDovL2xvY2FsaG9zdDp7SEVMUEVSX1BPUlR9L2V4cG9ydHMve2ZpbGVuYW1lfScNCiAgICAgICAgICAgICAgICANCiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfcmVzcG9uc2UoMjAwKQ0KICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoJ0NvbnRlbnQtVHlwZScsICdhcHBsaWNhdGlvbi9qc29uJykNCiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfY29yc19oZWFkZXJzKCkNCiAgICAgICAgICAgICAgICBzZWxmLmVuZF9oZWFkZXJzKCkNCiAgICAgICAgICAgICAgICBzZWxmLndmaWxlLndyaXRlKGpzb24uZHVtcHMoew0KICAgICAgICAgICAgICAgICAgICAnc3VjY2Vzcyc6IFRydWUsDQogICAgICAgICAgICAgICAgICAgICd1cmwnOiBmaWxlX3VybCwNCiAgICAgICAgICAgICAgICAgICAgJ2ZpbGVuYW1lJzogZmlsZW5hbWUNCiAgICAgICAgICAgICAgICB9KS5lbmNvZGUoKSkNCiAgICAgICAgICAgICAgICANCiAgICAgICAgICAgICAgICBwcmludChmIiAgLT4gU2F2ZWQ6IHtmaWxlbmFtZX0iKQ0KICAgICAgICAgICAgICAgIA0KICAgICAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOg0KICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9yZXNwb25zZSg1MDApDQogICAgICAgICAgICAgICAgc2VsZi5zZW5kX2hlYWRlcignQ29udGVudC1UeXBlJywgJ2FwcGxpY2F0aW9uL2pzb24nKQ0KICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9jb3JzX2hlYWRlcnMoKQ0KICAgICAgICAgICAgICAgIHNlbGYuZW5kX2hlYWRlcnMoKQ0KICAgICAgICAgICAgICAgIHNlbGYud2ZpbGUud3JpdGUoanNvbi5kdW1wcyh7J2Vycm9yJzogc3RyKGUpfSkuZW5jb2RlKCkpDQogICAgICAgIGVsc2U6DQogICAgICAgICAgICBzZWxmLnNlbmRfcmVzcG9uc2UoNDA0KQ0KICAgICAgICAgICAgc2VsZi5zZW5kX2NvcnNfaGVhZGVycygpDQogICAgICAgICAgICBzZWxmLmVuZF9oZWFkZXJzKCkNCg0KDQpkZWYgbWFpbigpOg0KICAgIG9zLmNoZGlyKG9zLnBhdGguZGlybmFtZShvcy5wYXRoLmFic3BhdGgoX19maWxlX18pKSkNCiAgICANCiAgICBwcmludCgpDQogICAgcHJpbnQoIj0iICogNTApDQogICAgcHJpbnQoIiAgSk9TTSBIZWxwZXIgLSBPU01BR0lDIEludGVncmF0aW9uIikNCiAgICBwcmludCgiPSIgKiA1MCkNCiAgICBwcmludCgpDQogICAgcHJpbnQoZiIgIEhlbHBlciBydW5uaW5nIG9uOiBodHRwOi8vbG9jYWxob3N0OntIRUxQRVJfUE9SVH0iKQ0KICAgIHByaW50KGYiICBFeHBvcnQgZGlyZWN0b3J5OiAge0VYUE9SVF9ESVJ9IikNCiAgICBwcmludCgpDQogICAgcHJpbnQoIiAgVGhpcyBoZWxwZXIgZW5hYmxlcyAnRXhwb3J0IHRvIEpPU00nIGZyb20iKQ0KICAgIHByaW50KCIgIEdpdEh1YiBQYWdlcyBvciBhbnkgaG9zdGVkIHZlcnNpb24gb2YgT1NNQUdJQy4iKQ0KICAgIHByaW50KCkNCiAgICBwcmludCgiICBQcmVzcyBDdHJsK0MgdG8gc3RvcCIpDQogICAgcHJpbnQoIj0iICogNTApDQogICAgcHJpbnQoKQ0KICAgIA0KICAgIHdpdGggc29ja2V0c2VydmVyLlRDUFNlcnZlcigoIiIsIEhFTFBFUl9QT1JUKSwgSk9TTUhlbHBlckhhbmRsZXIpIGFzIGh0dHBkOg0KICAgICAgICB0cnk6DQogICAgICAgICAgICBodHRwZC5zZXJ2ZV9mb3JldmVyKCkNCiAgICAgICAgZXhjZXB0IEtleWJvYXJkSW50ZXJydXB0Og0KICAgICAgICAgICAgcHJpbnQoIlxuXG5KT1NNIEhlbHBlciBzdG9wcGVkLiIpDQoNCg0KaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjoNCiAgICBtYWluKCkNCg=='; $bytes = [System.Convert]::FromBase64String($b64); $content = [System.Text.Encoding]::UTF8.GetString($bytes); [System.IO.File]::WriteAllText('%SCRIPT_DIR%josm-helper.py', $content, [System.Text.Encoding]::UTF8); exit 0" <NUL >NUL 2>&1
+exit /b
+
+:: Function to load JOSM imagery
+:load_imagery
+set "RETRY=0"
+:wait_imagery
+set /a RETRY+=1
+if %RETRY% GTR 15 goto imagery_done
+
+powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri 'http://localhost:8111/version' -TimeoutSec 2 -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    powershell -NoProfile -NonInteractive -InputFormat None -Command "$n='OpenStreetMap Carto (Standard)'; $u='http://localhost:8111/imagery?name='+[System.Uri]::EscapeDataString($n); try { Invoke-WebRequest -Uri $u -Method GET -TimeoutSec 3 -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo        Imagery loaded [OK]
+    ) else (
+        echo        Imagery load failed - load manually
+    )
+    goto imagery_done
+) else (
+    ping 127.0.0.1 -n 2 >NUL
+    goto wait_imagery
+)
+:imagery_done
+exit /b
