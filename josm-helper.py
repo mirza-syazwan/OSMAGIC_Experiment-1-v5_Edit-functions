@@ -1,139 +1,3 @@
-@echo off
-setlocal enabledelayedexpansion
-title OSMAGIC Launcher
-color 0A
-echo.
-echo  ==========================================
-echo        OSMAGIC GPS Trace Editor
-echo  ==========================================
-echo.
-
-set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%"
-set "GITHUB_PAGES_URL=https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Edit-functions/"
-set "HELPER_PORT=8001"
-set "JOSM_PATH="
-
-echo  [1/4] Auto-detecting JOSM...
-echo.
-
-tasklist /FI "IMAGENAME eq JOSM.exe" 2>NUL | find /I "JOSM.exe" >NUL
-if %ERRORLEVEL% EQU 0 (
-    echo        JOSM is already running [OK]
-    set "JOSM_PATH=RUNNING"
-    goto check_helper
-)
-
-:: Check common JOSM locations
-set "JOSM_CHECK=%USERPROFILE%\AppData\Local\JOSM\JOSM.exe"
-if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
-
-if not defined JOSM_PATH (
-    set "JOSM_CHECK=C:\Program Files\JOSM\josm.exe"
-    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
-)
-
-if not defined JOSM_PATH (
-    set "JOSM_CHECK=%USERPROFILE%\AppData\Local\JOSM\josm.exe"
-    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
-)
-
-if not defined JOSM_PATH (
-    set "JOSM_CHECK=%USERPROFILE%\Downloads\josm-tested.jar"
-    if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
-)
-
-if defined JOSM_PATH (
-    echo        Found JOSM at: %JOSM_PATH%
-    echo        Starting JOSM...
-    echo %JOSM_PATH% | find /I ".jar" >NUL
-    if %ERRORLEVEL% EQU 0 (
-        start "" javaw -jar "%JOSM_PATH%"
-    ) else (
-        start "" "%JOSM_PATH%"
-    )
-    timeout /t 5 /nobreak >NUL
-    echo        JOSM started [OK]
-) else (
-    echo        JOSM not found in common locations.
-    echo        Please start JOSM manually.
-)
-
-:check_helper
-echo.
-echo  [2/4] Checking JOSM Helper...
-echo.
-
-netstat -ano 2>NUL | findstr ":%HELPER_PORT% " | findstr "LISTENING" >NUL
-if %ERRORLEVEL% EQU 0 (
-    echo        JOSM Helper already running [OK]
-    goto open_browser
-)
-
-if exist "%SCRIPT_DIR%josm-helper.py" (
-    echo        josm-helper.py found [OK]
-    goto start_helper
-)
-
-echo        josm-helper.py not found. Creating...
-:: Try copying from backup first (if sharing files together)
-if exist "%SCRIPT_DIR%josm-helper.py.backup" (
-    copy "%SCRIPT_DIR%josm-helper.py.backup" "%SCRIPT_DIR%josm-helper.py" >NUL 2>&1
-    if exist "%SCRIPT_DIR%josm-helper.py" (
-        echo        Created from backup [OK]
-        goto start_helper
-    )
-)
-:: Try downloading from GitHub
-echo        Downloading from GitHub...
-powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/mirza-syazwan/OSMAGIC_Experiment-1-v5_Edit-functions/main/josm-helper.py' -OutFile '%SCRIPT_DIR%josm-helper.py' -ErrorAction Stop; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
-if exist "%SCRIPT_DIR%josm-helper.py" (
-    echo        Downloaded from GitHub [OK]
-) else (
-    echo        [!] Failed to get josm-helper.py
-    echo        The helper file is embedded in this batch file.
-    echo        If download fails, make sure you have internet access.
-    echo        Or include josm-helper.py.backup in the same folder.
-    pause
-    exit /b 1
-)
-
-:start_helper
-echo        Starting JOSM Helper...
-start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && python josm-helper.py"
-timeout /t 2 /nobreak >NUL
-echo        JOSM Helper started [OK]
-
-:open_browser
-echo.
-echo  [3/4] Opening OSMAGIC...
-start "" "%GITHUB_PAGES_URL%"
-echo        Browser opened [OK]
-
-echo.
-echo  [4/4] Status Summary
-echo.
-echo  ==========================================
-echo    OSMAGIC Ready!
-echo  ==========================================
-echo    Online:  %GITHUB_PAGES_URL%
-echo    Helper:  http://localhost:%HELPER_PORT%
-if defined JOSM_PATH (
-    echo    JOSM:    Running
-) else (
-    echo    JOSM:    Not found
-)
-echo  ==========================================
-echo.
-pause
-exit /b 0
-
-:: Function to create josm-helper.py from embedded content
-:create_helper_file
-:: Create a temporary PowerShell script that writes the Python file
-set "TEMP_PS=%TEMP%\create_josm_helper.ps1"
-(
-echo $content = @'
 #!/usr/bin/env python3
 """
 JOSM Helper - Minimal local server for JOSM integration
@@ -213,7 +77,7 @@ def focus_josm_window():
 
 class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        timestamp = datetime.now().strftime('%%H:%%M:%%S')
+        timestamp = datetime.now().strftime('%H:%M:%S')
         print(f"[{timestamp}] {args[0]}")
     
     def send_cors_headers(self):
@@ -252,9 +116,9 @@ class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
                 'message': 'JOSM focused' if success else 'JOSM window not found'
             }).encode())
             if success:
-                print("  -^> JOSM window focused")
+                print("  -> JOSM window focused")
             else:
-                print("  -^> JOSM window not found")
+                print("  -> JOSM window not found")
         
         elif self.path.startswith('/exports/'):
             # Serve exported OSM files
@@ -314,7 +178,7 @@ class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
                     'filename': filename
                 }).encode())
                 
-                print(f"  -^> Saved: {filename}")
+                print(f"  -> Saved: {filename}")
                 
             except Exception as e:
                 self.send_response(500)
@@ -355,9 +219,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-'@
-$content | Out-File -FilePath '%SCRIPT_DIR%josm-helper.py' -Encoding UTF8
-) > "%TEMP_PS%"
-powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%TEMP_PS%" <NUL >NUL 2>&1
-del "%TEMP_PS%" >NUL 2>&1
-exit /b
