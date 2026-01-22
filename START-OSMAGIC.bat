@@ -13,6 +13,42 @@ cd /d "%SCRIPT_DIR%"
 set "GITHUB_PAGES_URL=https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Edit-functions/"
 set "HELPER_PORT=8001"
 set "JOSM_PATH="
+set "PYTHON_FOUND=0"
+
+echo  [0/4] Checking prerequisites...
+echo.
+
+:: Check for Python
+where python >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    python --version >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo        Python found [OK]
+        set "PYTHON_FOUND=1"
+    )
+)
+
+if %PYTHON_FOUND% EQU 0 (
+    echo        Python not found. Checking for portable Python...
+    if exist "%SCRIPT_DIR%python\python.exe" (
+        echo        Portable Python found [OK]
+        set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
+        set "PYTHON_FOUND=1"
+    ) else (
+        echo        Python not found. Downloading portable Python...
+        call :download_python
+        if exist "%SCRIPT_DIR%python\python.exe" (
+            echo        Portable Python downloaded [OK]
+            set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
+            set "PYTHON_FOUND=1"
+        ) else (
+            echo        [!] Failed to get Python
+            echo        Please install Python from: https://www.python.org/downloads/
+            echo        Or the helper will not work.
+            echo.
+        )
+    )
+)
 
 echo  [1/4] Auto-detecting JOSM...
 echo.
@@ -45,18 +81,48 @@ if not defined JOSM_PATH (
 
 if defined JOSM_PATH (
     echo        Found JOSM at: %JOSM_PATH%
-    echo        Starting JOSM...
     echo %JOSM_PATH% | find /I ".jar" >NUL
     if %ERRORLEVEL% EQU 0 (
-        start "" javaw -jar "%JOSM_PATH%"
+        :: Check for Java before starting JAR
+        where java >NUL 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            echo        Starting JOSM...
+            start "" javaw -jar "%JOSM_PATH%"
+            timeout /t 5 /nobreak >NUL
+            echo        JOSM started [OK]
+        ) else (
+            echo        [!] Java not found. Cannot start JOSM JAR file.
+            echo        Please install Java from: https://www.java.com/download/
+        )
     ) else (
+        echo        Starting JOSM...
         start "" "%JOSM_PATH%"
+        timeout /t 5 /nobreak >NUL
+        echo        JOSM started [OK]
     )
-    timeout /t 5 /nobreak >NUL
-    echo        JOSM started [OK]
 ) else (
-    echo        JOSM not found in common locations.
-    echo        Please start JOSM manually.
+    echo        JOSM not found. Checking for Java...
+    where java >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo        Java found. Downloading JOSM...
+        call :download_josm
+        if exist "%SCRIPT_DIR%josm-tested.jar" (
+            set "JOSM_PATH=%SCRIPT_DIR%josm-tested.jar"
+            echo        JOSM downloaded [OK]
+            echo        Starting JOSM...
+            start "" javaw -jar "%JOSM_PATH%"
+            timeout /t 5 /nobreak >NUL
+            echo        JOSM started [OK]
+        ) else (
+            echo        [!] Failed to download JOSM
+            echo        Please download manually from: https://josm.openstreetmap.de/
+            echo        Or install Java and try again.
+        )
+    ) else (
+        echo        [!] Java not found. JOSM requires Java.
+        echo        Please install Java from: https://www.java.com/download/
+        echo        Then run this script again to auto-download JOSM.
+    )
 )
 
 :check_helper
@@ -99,8 +165,17 @@ if exist "%SCRIPT_DIR%josm-helper.py" (
 )
 
 :start_helper
+if %PYTHON_FOUND% EQU 0 (
+    echo        [!] Python not available. Helper cannot start.
+    echo        Please install Python or the helper will not work.
+    goto open_browser
+)
 echo        Starting JOSM Helper...
-start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && python josm-helper.py"
+if defined PYTHON_CMD (
+    start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && \"%PYTHON_CMD%\" josm-helper.py"
+) else (
+    start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && python josm-helper.py"
+)
 timeout /t 2 /nobreak >NUL
 echo        JOSM Helper started [OK]
 
@@ -127,6 +202,42 @@ echo  ==========================================
 echo.
 pause
 exit /b 0
+
+:: Function to download portable Python
+:download_python
+echo        Downloading Python embeddable package...
+set "PYTHON_ZIP=%SCRIPT_DIR%python-embed.zip"
+set "PYTHON_URL=https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
+
+powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PYTHON_ZIP%' -ErrorAction Stop; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+
+if exist "%PYTHON_ZIP%" (
+    echo        Extracting Python...
+    powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Expand-Archive -Path '%PYTHON_ZIP%' -DestinationPath '%SCRIPT_DIR%python' -Force; Remove-Item '%PYTHON_ZIP%'; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+    
+    :: Enable pip by uncommenting import in python311._pth
+    if exist "%SCRIPT_DIR%python\python311._pth" (
+        powershell -NoProfile -NonInteractive -Command "(Get-Content '%SCRIPT_DIR%python\python311._pth') -replace '#import site', 'import site' | Set-Content '%SCRIPT_DIR%python\python311._pth'" <NUL >NUL 2>&1
+    )
+    
+    if exist "%SCRIPT_DIR%python\python.exe" (
+        exit /b 0
+    )
+)
+exit /b 1
+
+:: Function to download JOSM
+:download_josm
+echo        Downloading JOSM JAR file...
+set "JOSM_URL=https://josm.openstreetmap.de/download/josm-tested.jar"
+set "JOSM_FILE=%SCRIPT_DIR%josm-tested.jar"
+
+powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri '%JOSM_URL%' -OutFile '%JOSM_FILE%' -ErrorAction Stop; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+
+if exist "%JOSM_FILE%" (
+    exit /b 0
+)
+exit /b 1
 
 :: Function to create josm-helper.py from embedded content
 :create_helper_file
