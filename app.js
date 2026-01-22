@@ -1804,59 +1804,32 @@ class TaskManager {
     }
 
     async sendToJOSM(josmXml, sequenceId) {
+        // Re-detect helper in case it wasn't detected on startup
+        await this.detectLocalHelper();
+        
         // First, check if JOSM is running and accessible
+        let josmRunning = false;
         try {
-            const versionResponse = await fetch('http://localhost:8111/version');
-            if (!versionResponse.ok) {
-                throw new Error('JOSM Remote Control is not responding. Please ensure JOSM is running and Remote Control is enabled.');
-            }
-            const version = await versionResponse.text();
-            console.log('JOSM version:', version);
+            const versionResponse = await fetch('http://localhost:8111/version', {
+                method: 'GET',
+                mode: 'no-cors',
+                cache: 'no-cache'
+            });
+            josmRunning = true;
+            console.log('✅ JOSM Remote Control is accessible');
         } catch (error) {
-            console.error('JOSM connectivity check failed:', error);
-            const proceed = confirm('Cannot connect to JOSM Remote Control.\n\nPlease ensure:\n1. JOSM is running\n2. Remote Control is enabled (Edit → Preferences → Remote Control)\n3. Port 8111 is not blocked\n\nWould you like to try anyway, or download the file instead?');
-            if (!proceed) {
-                this.downloadFile(josmXml, `sequence_${sequenceId}.osm`, 'application/xml');
-                return;
-            }
+            console.warn('⚠️ JOSM connectivity check failed (this is OK if JOSM is starting):', error);
+            // Continue anyway - JOSM might be starting up
         }
         
         console.log('Sending to JOSM:', {
-            xmlLength: josmXml.length
+            xmlLength: josmXml.length,
+            helperUrl: this.localHelperUrl,
+            josmRunning: josmRunning
         });
         
         // Get the sequence to calculate bounding box
         const sequence = this.sequences.find(s => String(s.id) === String(sequenceId));
-        if (!sequence) {
-            console.error('Sequence not found for bounding box calculation');
-            // Continue without OSM data download
-        } else {
-            // Step 1: Download OSM data for the area (into JOSM's default data layer)
-            try {
-                const bbox = this.calculateBoundingBox(sequence);
-                console.log('Step 1: Downloading OSM data for bounding box:', bbox);
-                
-                // Use JOSM's load_and_zoom endpoint to download OSM data
-                // new_layer=false means it loads into existing/default layer
-                const loadUrl = `http://localhost:8111/load_and_zoom?left=${bbox.left}&right=${bbox.right}&top=${bbox.top}&bottom=${bbox.bottom}`;
-                console.log('JOSM load_and_zoom URL:', loadUrl);
-                
-                // Use iframe to trigger OSM data download
-                const osmIframe = document.createElement('iframe');
-                osmIframe.style.display = 'none';
-                osmIframe.src = loadUrl;
-                document.body.appendChild(osmIframe);
-                console.log('OSM data download triggered via iframe');
-                
-                // Wait for OSM data to load
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Clean up iframe
-                document.body.removeChild(osmIframe);
-            } catch (error) {
-                console.warn('Failed to download OSM data, continuing with GPS trace only:', error);
-            }
-        }
         
         // Use server-side export + JOSM import endpoint (most reliable)
         // This avoids URL length limits and encoding issues
@@ -1864,16 +1837,16 @@ class TaskManager {
         
         // If no server available, fall back to download mode
         if (!exportServerUrl) {
-            console.log('No local server available - downloading file instead');
+            console.log('⚠️ No local helper server available - downloading file instead');
             this.downloadFile(josmXml, `sequence_${sequenceId}.osm`, 'application/xml');
-            alert('File downloaded! Open it manually in JOSM.\n\nTip: Run the JOSM Helper locally for direct export.');
+            alert('File downloaded! Open it manually in JOSM.\n\nTip: Make sure the JOSM Helper is running (port 8001) for direct export.');
             return;
         }
         
         try {
-            console.log('Step 2: Uploading GPS trace OSM XML to server...');
+            console.log('📤 Step 1: Uploading GPS trace OSM XML to helper server...');
             
-            // POST the OSM XML to our server (or helper)
+            // POST the OSM XML to our helper server
             const response = await fetch(`${exportServerUrl}/export`, {
                 method: 'POST',
                 headers: {
@@ -1886,17 +1859,44 @@ class TaskManager {
             });
             
             if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+                throw new Error(`Helper server error: ${response.status} ${response.statusText}`);
             }
             
             const result = await response.json();
             
             if (!result.success || !result.url) {
-                throw new Error('Server did not return file URL');
+                throw new Error('Helper server did not return file URL');
             }
             
-            console.log('Step 3: File available at:', result.url);
-            console.log('Step 4: Opening JOSM immediately...');
+            console.log('✅ Step 2: File saved at:', result.url);
+            
+            // Download OSM data for context (if sequence available)
+            if (sequence) {
+                try {
+                    const bbox = this.calculateBoundingBox(sequence);
+                    console.log('📥 Step 3: Downloading OSM data for context (bbox:', bbox, ')');
+                    
+                    // Use JOSM's load_and_zoom endpoint to download OSM data
+                    const loadUrl = `http://localhost:8111/load_and_zoom?left=${bbox.left}&right=${bbox.right}&top=${bbox.top}&bottom=${bbox.bottom}`;
+                    
+                    // Use iframe to trigger OSM data download (bypasses CORS)
+                    const osmIframe = document.createElement('iframe');
+                    osmIframe.style.display = 'none';
+                    osmIframe.src = loadUrl;
+                    document.body.appendChild(osmIframe);
+                    
+                    // Wait for OSM data to load
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Clean up iframe
+                    document.body.removeChild(osmIframe);
+                    console.log('✅ OSM context data loaded');
+                } catch (error) {
+                    console.warn('⚠️ Failed to download OSM context data, continuing with GPS trace only:', error);
+                }
+            }
+            
+            console.log('📥 Step 4: Importing GPS trace into JOSM...');
             
             // Send to JOSM using iframe (more reliable than fetch for JOSM Remote Control)
             // new_layer=false merges GPS trace into the existing OSM data layer
@@ -1909,73 +1909,123 @@ class TaskManager {
             iframe.src = josmImportUrl;
             document.body.appendChild(iframe);
             
-            console.log('JOSM import request sent via iframe');
+            console.log('✅ JOSM import request sent');
             
-            // Wait for JOSM to load the data, then focus window
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Wait for JOSM to load the data (longer delay to ensure import completes)
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             // Clean up iframe
             document.body.removeChild(iframe);
             
             // Zoom JOSM to the loaded data
-            const zoomIframe = document.createElement('iframe');
-            zoomIframe.style.display = 'none';
-            zoomIframe.src = 'http://localhost:8111/zoom?mode=download';
-            document.body.appendChild(zoomIframe);
-            setTimeout(() => document.body.removeChild(zoomIframe), 500);
+            try {
+                const zoomIframe = document.createElement('iframe');
+                zoomIframe.style.display = 'none';
+                zoomIframe.src = 'http://localhost:8111/zoom?mode=download';
+                document.body.appendChild(zoomIframe);
+                setTimeout(() => document.body.removeChild(zoomIframe), 500);
+            } catch (error) {
+                console.warn('Failed to zoom JOSM:', error);
+            }
             
-            // Focus JOSM window after data is loaded
-            console.log('Data sent to JOSM, focusing JOSM window...');
+            // Focus JOSM window after data is loaded (with multiple attempts for reliability)
+            console.log('🎯 Step 5: Focusing JOSM window...');
+            
+            // Try focusing immediately
             await this.blurBrowserForJOSM();
             
+            // Wait a bit and try again (sometimes Windows needs a moment)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await this.blurBrowserForJOSM();
+            
+            // One more time after a short delay to ensure it sticks
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await this.blurBrowserForJOSM();
+            
+            console.log('✅ Export complete! Data sent to JOSM.');
             return;
             
         } catch (error) {
-            console.error('Server-based export failed:', error);
+            console.error('❌ Server-based export failed:', error);
             console.log('Falling back to direct download...');
             
             // Fallback: direct file download
-            this.downloadAndOpenInJOSM(josmXml, sequenceId);
+            this.downloadFile(josmXml, `sequence_${sequenceId}.osm`, 'application/xml');
+            alert(`Export failed: ${error.message}\n\nFile downloaded instead. Please open it manually in JOSM.`);
         }
     }
     
     async blurBrowserForJOSM() {
         // Call server endpoint to focus JOSM using Windows API
-        console.log('Requesting server to focus JOSM window...');
+        console.log('🎯 Requesting server to focus JOSM window...');
         
-        // Determine which server to use
-        const focusUrl = this.localHelperUrl 
-            ? `${this.localHelperUrl}/focus-josm`
-            : 'http://localhost:8000/focus-josm';
+        // Try helper first (port 8001), then main server (port 8000)
+        const focusUrls = [];
+        if (this.localHelperUrl) {
+            focusUrls.push(`${this.localHelperUrl}/focus-josm`);
+        }
+        // Also try the helper port directly
+        focusUrls.push('http://localhost:8001/focus-josm');
+        // And the main server
+        if (this.isLocalMode) {
+            focusUrls.push('http://localhost:8000/focus-josm');
+        }
         
-        try {
-            const response = await fetch(focusUrl);
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log('✅ JOSM window focused successfully via server');
-            } else {
-                console.log('⚠️ JOSM window not found. Is JOSM running?');
-                // Fallback: try browser blur methods
-                window.blur();
+        let focused = false;
+        for (const focusUrl of focusUrls) {
+            try {
+                console.log(`Trying focus endpoint: ${focusUrl}`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                
+                const response = await fetch(focusUrl, {
+                    signal: controller.signal,
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        console.log('✅ JOSM window focused successfully via', focusUrl);
+                        focused = true;
+                        break;
+                    } else {
+                        console.log(`⚠️ Focus endpoint responded but JOSM not found: ${focusUrl}`);
+                    }
+                }
+            } catch (error) {
+                // Try next URL
+                console.log(`Focus endpoint failed: ${focusUrl}`, error.message);
+                continue;
             }
-        } catch (error) {
-            console.error('Failed to focus JOSM via server:', error);
-            // Fallback: try browser blur
-            window.blur();
+        }
+        
+        if (!focused) {
+            console.warn('⚠️ Could not focus JOSM via server. Is JOSM running?');
+            // Fallback: try browser blur (minimal effect but might help)
+            try {
+                window.blur();
+            } catch (e) {
+                // Ignore blur errors
+            }
         }
     }
     
     async detectLocalHelper() {
-        // Try to detect if local JOSM helper is running
+        // Try to detect if local JOSM helper is running (port 8001)
         const helperUrl = `http://localhost:${this.localHelperPort}`;
         
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const timeoutId = setTimeout(() => controller.abort(), 1500);
             
             const response = await fetch(`${helperUrl}/ping`, {
-                signal: controller.signal
+                signal: controller.signal,
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache'
             });
             clearTimeout(timeoutId);
             
@@ -1990,21 +2040,33 @@ class TaskManager {
             }
         } catch (error) {
             // Helper not available - this is fine for GitHub Pages mode
-            console.log('ℹ️ Local JOSM helper not detected (this is normal for online mode)');
+            console.log('ℹ️ JOSM helper not detected at port 8001 (this is normal if helper is not running)');
         }
         
-        // Also check if running on localhost with main server
+        // Also check if running on localhost with main server (port 8000)
         if (this.isLocalMode) {
             try {
-                const response = await fetch('http://localhost:8000/exports/');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                
+                const response = await fetch('http://localhost:8000/exports/', {
+                    signal: controller.signal,
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+                clearTimeout(timeoutId);
+                
                 if (response.ok || response.status === 404) {
                     // Main server is running locally
                     this.localHelperUrl = 'http://localhost:8000';
-                    console.log('✅ Running in local mode with main server');
+                    console.log('✅ Running in local mode with main server at port 8000');
+                    this.showHelperStatus(true);
                     return true;
                 }
             } catch (error) {
                 // Main server not available
+                console.log('ℹ️ Main server not detected at port 8000');
             }
         }
         

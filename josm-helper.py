@@ -20,6 +20,16 @@ import shutil
 import ctypes
 from ctypes import wintypes
 
+# Define FLASHWINFO structure for window flashing
+class FLASHWINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_uint),
+        ("hwnd", wintypes.HWND),
+        ("dwFlags", ctypes.c_uint),
+        ("uCount", ctypes.c_uint),
+        ("dwTimeout", ctypes.c_uint)
+    ]
+
 # Configuration
 HELPER_PORT = 8001  # Different from main server
 EXPORT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exports')
@@ -44,7 +54,11 @@ def focus_josm_window():
                 user32.GetWindowTextW(hwnd, buffer, length + 1)
                 title = buffer.value.lower()
                 
-                if 'josm' in title or 'java openstreetmap' in title:
+                # Match various JOSM window title patterns
+                if ('josm' in title or 
+                    'java openstreetmap' in title or 
+                    'openstreetmap editor' in title or
+                    title.startswith('josm')):
                     if user32.IsWindowVisible(hwnd):
                         josm_hwnd = hwnd
                         return False
@@ -54,17 +68,52 @@ def focus_josm_window():
         
         if josm_hwnd:
             SW_RESTORE = 9
-            user32.ShowWindow(josm_hwnd, SW_RESTORE)
-            user32.SetForegroundWindow(josm_hwnd)
-            user32.BringWindowToTop(josm_hwnd)
+            SW_SHOW = 5
             
+            # First, restore if minimized
+            user32.ShowWindow(josm_hwnd, SW_RESTORE)
+            user32.ShowWindow(josm_hwnd, SW_SHOW)
+            
+            # Bring to foreground using multiple methods for reliability
+            user32.BringWindowToTop(josm_hwnd)
+            user32.SetForegroundWindow(josm_hwnd)
+            user32.SetActiveWindow(josm_hwnd)
+            
+            # Use thread attachment trick for stubborn windows
             try:
                 current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
                 foreground_thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
                 if current_thread != foreground_thread:
                     user32.AttachThreadInput(current_thread, foreground_thread, True)
                     user32.SetForegroundWindow(josm_hwnd)
+                    user32.SetActiveWindow(josm_hwnd)
                     user32.AttachThreadInput(current_thread, foreground_thread, False)
+            except:
+                pass
+            
+            # Final attempt - flash window to get attention
+            try:
+                FLASHW_STOP = 0
+                FLASHW_CAPTION = 1
+                FLASHW_TRAY = 2
+                FLASHW_ALL = 3
+                FLASHW_TIMER = 4
+                FLASHW_TIMERNOFG = 12
+                
+                # Flash the window briefly
+                flashwinfo = FLASHWINFO()
+                flashwinfo.cbSize = ctypes.sizeof(FLASHWINFO)
+                flashwinfo.hwnd = josm_hwnd
+                flashwinfo.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG
+                flashwinfo.uCount = 1
+                flashwinfo.dwTimeout = 100
+                
+                # Try to call FlashWindowEx (may not be available on all Windows versions)
+                try:
+                    user32.FlashWindowEx(ctypes.byref(flashwinfo))
+                except AttributeError:
+                    # FlashWindowEx not available, skip
+                    pass
             except:
                 pass
             
