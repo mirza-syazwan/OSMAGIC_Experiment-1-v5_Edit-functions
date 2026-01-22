@@ -19,6 +19,17 @@ set "HELPER_VERIFIED=0"
 echo  [0/4] Checking prerequisites...
 echo.
 
+:: Check if PowerShell is available (needed for downloads)
+powershell -NoProfile -Command "exit 0" >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] WARNING: PowerShell not available
+    echo        Auto-download features will not work
+    echo        Please install Python and JOSM manually
+    echo.
+) else (
+    echo        PowerShell available [OK] ^(for auto-downloads^)
+)
+
 :: Check for Python - try multiple methods
 set "PYTHON_FOUND=0"
 
@@ -110,8 +121,12 @@ if %PYTHON_FOUND% EQU 0 (
         set "PYTHON_FOUND=1"
     ) else (
         echo        Python not found. Attempting to download portable Python...
-        echo        ^(This requires internet connection^)
+        echo        ^(This requires internet connection and may take a few minutes^)
+        echo        Please wait...
         call :download_python
+        if %ERRORLEVEL% NEQ 0 (
+            echo        [!] Python download failed - see error messages above
+        )
         if exist "%SCRIPT_DIR%python\python.exe" (
             echo        Portable Python downloaded [OK]
             set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
@@ -200,7 +215,11 @@ if defined JOSM_PATH (
     where java >NUL 2>&1
     if %ERRORLEVEL% EQU 0 (
         echo        Java found. Downloading JOSM...
+        echo        Please wait...
         call :download_josm
+        if %ERRORLEVEL% NEQ 0 (
+            echo        [!] JOSM download failed - see error messages above
+        )
         if exist "%SCRIPT_DIR%josm-tested.jar" (
             set "JOSM_PATH=%SCRIPT_DIR%josm-tested.jar"
             echo        JOSM downloaded [OK]
@@ -215,8 +234,13 @@ if defined JOSM_PATH (
         )
     ) else (
         echo        [!] Java not found. JOSM requires Java.
-        echo        Please install Java from: https://www.java.com/download/
-        echo        Then run this script again to auto-download JOSM.
+        echo.
+        echo        To use JOSM, you need to:
+        echo        1. Install Java from: https://www.java.com/download/
+        echo        2. Run this script again - it will auto-download JOSM
+        echo.
+        echo        Note: JOSM cannot run without Java installed.
+        echo        The app will still work, but export will download files instead.
     )
 )
 
@@ -381,38 +405,79 @@ exit /b 0
 :: Function to download portable Python
 :download_python
 echo        Downloading Python embeddable package...
+echo        ^(This may take a few minutes - ~25MB download^)
 set "PYTHON_ZIP=%SCRIPT_DIR%python-embed.zip"
 set "PYTHON_URL=https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
 
-powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PYTHON_ZIP%' -ErrorAction Stop; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
-
-if exist "%PYTHON_ZIP%" (
-    echo        Extracting Python...
-    powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Expand-Archive -Path '%PYTHON_ZIP%' -DestinationPath '%SCRIPT_DIR%python' -Force; Remove-Item '%PYTHON_ZIP%'; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
-    
-    :: Enable pip by uncommenting import in python311._pth
-    if exist "%SCRIPT_DIR%python\python311._pth" (
-        powershell -NoProfile -NonInteractive -Command "(Get-Content '%SCRIPT_DIR%python\python311._pth') -replace '#import site', 'import site' | Set-Content '%SCRIPT_DIR%python\python311._pth'" <NUL >NUL 2>&1
-    )
-    
-    if exist "%SCRIPT_DIR%python\python.exe" (
-        exit /b 0
-    )
+:: Check internet connectivity first
+echo        Checking internet connection...
+ping -n 1 8.8.8.8 >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] No internet connection detected
+    echo        Cannot download Python without internet
+    exit /b 1
 )
-exit /b 1
+
+:: Download Python with visible progress
+echo        Downloading from: %PYTHON_URL%
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $ProgressPreference = 'SilentlyContinue'; Write-Host 'Downloading...'; Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PYTHON_ZIP%' -ErrorAction Stop; Write-Host 'Download complete'; exit 0 } catch { Write-Host 'Download failed:'; Write-Host $_.Exception.Message; exit 1 }"
+
+if not exist "%PYTHON_ZIP%" (
+    echo        [!] Download failed - check internet connection
+    echo        You can download manually from: %PYTHON_URL%
+    exit /b 1
+)
+
+echo        Extracting Python...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Expand-Archive -Path '%PYTHON_ZIP%' -DestinationPath '%SCRIPT_DIR%python' -Force; Remove-Item '%PYTHON_ZIP%'; Write-Host 'Extraction complete'; exit 0 } catch { Write-Host 'Extraction failed:'; Write-Host $_.Exception.Message; exit 1 }"
+
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] Extraction failed
+    exit /b 1
+)
+
+:: Enable pip by uncommenting import in python311._pth
+if exist "%SCRIPT_DIR%python\python311._pth" (
+    echo        Enabling pip support...
+    powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "(Get-Content '%SCRIPT_DIR%python\python311._pth') -replace '#import site', 'import site' | Set-Content '%SCRIPT_DIR%python\python311._pth'"
+)
+
+if exist "%SCRIPT_DIR%python\python.exe" (
+    echo        Python ready to use
+    exit /b 0
+) else (
+    echo        [!] Python extraction incomplete - python.exe not found
+    exit /b 1
+)
 
 :: Function to download JOSM
 :download_josm
 echo        Downloading JOSM JAR file...
+echo        ^(This may take a few minutes - ~50MB download^)
 set "JOSM_URL=https://josm.openstreetmap.de/download/josm-tested.jar"
 set "JOSM_FILE=%SCRIPT_DIR%josm-tested.jar"
 
-powershell -NoProfile -NonInteractive -InputFormat None -Command "try { Invoke-WebRequest -Uri '%JOSM_URL%' -OutFile '%JOSM_FILE%' -ErrorAction Stop; exit 0 } catch { exit 1 }" <NUL >NUL 2>&1
+:: Check internet connectivity first
+echo        Checking internet connection...
+ping -n 1 8.8.8.8 >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] No internet connection detected
+    echo        Cannot download JOSM without internet
+    exit /b 1
+)
+
+:: Download JOSM with visible progress
+echo        Downloading from: %JOSM_URL%
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $ProgressPreference = 'SilentlyContinue'; Write-Host 'Downloading...'; Invoke-WebRequest -Uri '%JOSM_URL%' -OutFile '%JOSM_FILE%' -ErrorAction Stop; Write-Host 'Download complete'; exit 0 } catch { Write-Host 'Download failed:'; Write-Host $_.Exception.Message; exit 1 }"
 
 if exist "%JOSM_FILE%" (
+    echo        JOSM downloaded successfully
     exit /b 0
+) else (
+    echo        [!] Download failed - check internet connection
+    echo        You can download manually from: %JOSM_URL%
+    exit /b 1
 )
-exit /b 1
 
 :: Function to create josm-helper.py from embedded content
 :create_helper_file
