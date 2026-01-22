@@ -14,37 +14,132 @@ set "GITHUB_PAGES_URL=https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Ed
 set "HELPER_PORT=8001"
 set "JOSM_PATH="
 set "PYTHON_FOUND=0"
+set "HELPER_VERIFIED=0"
 
 echo  [0/4] Checking prerequisites...
 echo.
 
-:: Check for Python
-where python >NUL 2>&1
+:: Check for Python - try multiple methods
+set "PYTHON_FOUND=0"
+
+:: Method 1: Try 'python' command
+python --version >NUL 2>&1
 if %ERRORLEVEL% EQU 0 (
-    python --version >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        echo        Python found [OK]
-        set "PYTHON_FOUND=1"
-    )
+    echo        Python found [OK] ^(python^)
+    set "PYTHON_FOUND=1"
+    goto python_found
 )
 
+:: Method 2: Try 'python3' command (common on some systems)
+python3 --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo        Python found [OK] ^(python3^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=python3"
+    goto python_found
+)
+
+:: Method 3: Try 'py' launcher (Windows Python launcher)
+py --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo        Python found [OK] ^(py launcher^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=py"
+    goto python_found
+)
+
+:: Method 4: Check common Python installation paths (check most recent versions first)
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    echo        Python found [OK] ^(%LOCALAPPDATA%\Programs\Python\Python311\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    goto python_found
+)
+if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
+    echo        Python found [OK] ^(%LOCALAPPDATA%\Programs\Python\Python310\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+    goto python_found
+)
+if exist "%LOCALAPPDATA%\Programs\Python\Python39\python.exe" (
+    echo        Python found [OK] ^(%LOCALAPPDATA%\Programs\Python\Python39\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python39\python.exe"
+    goto python_found
+)
+if exist "%PROGRAMFILES%\Python311\python.exe" (
+    echo        Python found [OK] ^(%PROGRAMFILES%\Python311\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%PROGRAMFILES%\Python311\python.exe"
+    goto python_found
+)
+if exist "%PROGRAMFILES%\Python310\python.exe" (
+    echo        Python found [OK] ^(%PROGRAMFILES%\Python310\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%PROGRAMFILES%\Python310\python.exe"
+    goto python_found
+)
+if exist "%PROGRAMFILES(X86)%\Python311\python.exe" (
+    echo        Python found [OK] ^(%PROGRAMFILES(X86)%\Python311\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%PROGRAMFILES(X86)%\Python311\python.exe"
+    goto python_found
+)
+if exist "%PROGRAMFILES(X86)%\Python310\python.exe" (
+    echo        Python found [OK] ^(%PROGRAMFILES(X86)%\Python310\python.exe^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%PROGRAMFILES(X86)%\Python310\python.exe"
+    goto python_found
+)
+
+:: Method 5: Check Microsoft Store Python location
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" (
+    echo        Python found [OK] ^(Microsoft Store^)
+    set "PYTHON_FOUND=1"
+    set "PYTHON_CMD=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
+    goto python_found
+)
+
+:python_found
+
 if %PYTHON_FOUND% EQU 0 (
-    echo        Python not found. Checking for portable Python...
+    echo        Python not found in PATH. Checking for portable Python...
     if exist "%SCRIPT_DIR%python\python.exe" (
         echo        Portable Python found [OK]
         set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
         set "PYTHON_FOUND=1"
     ) else (
-        echo        Python not found. Downloading portable Python...
+        echo        Python not found. Attempting to download portable Python...
+        echo        ^(This requires internet connection^)
         call :download_python
         if exist "%SCRIPT_DIR%python\python.exe" (
             echo        Portable Python downloaded [OK]
             set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
             set "PYTHON_FOUND=1"
         ) else (
-            echo        [!] Failed to get Python
-            echo        Please install Python from: https://www.python.org/downloads/
-            echo        Or the helper will not work.
+            echo        [!] Python not found and download failed
+            echo.
+            echo        Python detection tried:
+            echo        - 'python' command
+            echo        - 'python3' command  
+            echo        - 'py' launcher
+            echo        - Common installation paths
+            echo        - Microsoft Store location
+            echo        - Portable Python in folder
+            echo.
+            echo        Diagnostic: Testing Python commands...
+            python --version 2>&1 || echo          'python' command: NOT FOUND
+            python3 --version 2>&1 || echo          'python3' command: NOT FOUND
+            py --version 2>&1 || echo          'py' launcher: NOT FOUND
+            echo.
+            echo        Solutions:
+            echo        1. Install Python from: https://www.python.org/downloads/
+            echo           ^(Make sure to check "Add Python to PATH"^)
+            echo        2. Add Python to your system PATH manually
+            echo        3. Place portable Python in: %SCRIPT_DIR%python\
+            echo        4. If Python IS installed, try running manually:
+            echo           python josm-helper.py
+            echo           ^(This will show the actual error^)
             echo.
         )
     )
@@ -132,8 +227,17 @@ echo.
 
 netstat -ano 2>NUL | findstr ":%HELPER_PORT% " | findstr "LISTENING" >NUL
 if %ERRORLEVEL% EQU 0 (
-    echo        JOSM Helper already running [OK]
-    goto open_browser
+    echo        JOSM Helper port is in use, verifying it's responding...
+    powershell -NoProfile -NonInteractive -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:%HELPER_PORT%/ping' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo        JOSM Helper already running and verified [OK]
+        set "HELPER_VERIFIED=1"
+        goto open_browser
+    ) else (
+        echo        [!] Port %HELPER_PORT% is in use but helper is not responding
+        echo        The port may be used by another application
+        echo        Helper will try to start anyway...
+    )
 )
 
 if exist "%SCRIPT_DIR%josm-helper.py" (
@@ -170,14 +274,70 @@ if %PYTHON_FOUND% EQU 0 (
     echo        Please install Python or the helper will not work.
     goto open_browser
 )
-echo        Starting JOSM Helper...
-if defined PYTHON_CMD (
-    start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && \"%PYTHON_CMD%\" josm-helper.py"
+
+:: Verify Python can actually run (quick syntax check)
+if exist "%SCRIPT_DIR%josm-helper.py" (
+    echo        Verifying Python can run the helper script...
+    if defined PYTHON_CMD (
+        "%PYTHON_CMD%" -m py_compile "%SCRIPT_DIR%josm-helper.py" >NUL 2>&1
+    ) else (
+        python -m py_compile "%SCRIPT_DIR%josm-helper.py" >NUL 2>&1
+    )
+    if %ERRORLEVEL% NEQ 0 (
+        echo        [!] WARNING: Python script has syntax errors
+        echo        The helper may not start correctly
+        echo        Check josm-helper.py for errors
+    )
 ) else (
-    start "JOSM Helper" /min cmd /k "cd /d %SCRIPT_DIR% && python josm-helper.py"
+    echo        [!] ERROR: josm-helper.py not found!
+    echo        Cannot start helper without this file.
+    goto open_browser
 )
-timeout /t 2 /nobreak >NUL
-echo        JOSM Helper started [OK]
+
+echo        Starting JOSM Helper...
+echo        (A new window will open - keep it open to see any errors)
+if defined PYTHON_CMD (
+    echo        Using Python: %PYTHON_CMD%
+    start "JOSM Helper" cmd /k "cd /d %SCRIPT_DIR% && echo Starting JOSM Helper... && echo Using: %PYTHON_CMD% && \"%PYTHON_CMD%\" josm-helper.py"
+) else (
+    echo        Using Python: python
+    start "JOSM Helper" cmd /k "cd /d %SCRIPT_DIR% && echo Starting JOSM Helper... && echo Using: python && python josm-helper.py"
+)
+echo        Waiting for helper to start...
+timeout /t 3 /nobreak >NUL
+
+:: Verify helper is actually running by checking port
+echo        Verifying helper is running...
+set "HELPER_VERIFIED=0"
+for /L %%i in (1,1,5) do (
+    netstat -ano 2>NUL | findstr ":%HELPER_PORT% " | findstr "LISTENING" >NUL
+    if %ERRORLEVEL% EQU 0 (
+        :: Port is listening, now verify it responds
+        powershell -NoProfile -NonInteractive -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:%HELPER_PORT%/ping' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >NUL 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            set "HELPER_VERIFIED=1"
+            goto helper_verified
+        )
+    )
+    timeout /t 1 /nobreak >NUL
+)
+
+:helper_verified
+if %HELPER_VERIFIED% EQU 1 (
+    echo        JOSM Helper started and verified [OK]
+) else (
+    echo        [!] WARNING: JOSM Helper may not have started correctly
+    echo        Check the "JOSM Helper" window for errors
+    echo        You can test it by opening: http://localhost:%HELPER_PORT%/ping
+    echo        If it shows an error, the helper is not running properly.
+    echo.
+    echo        Common issues:
+    echo        - Python not found or not in PATH
+    echo        - Port 8001 already in use
+    echo        - Missing dependencies in Python
+    echo        - josm-helper.py file has errors
+    echo.
+)
 
 :open_browser
 echo.
@@ -192,13 +352,28 @@ echo  ==========================================
 echo    OSMAGIC Ready!
 echo  ==========================================
 echo    Online:  %GITHUB_PAGES_URL%
-echo    Helper:  http://localhost:%HELPER_PORT%
+if %HELPER_VERIFIED% EQU 1 (
+    echo    Helper:  Running ^(port %HELPER_PORT%^)
+) else (
+    echo    Helper:  NOT VERIFIED - Check "JOSM Helper" window
+    echo            Test: http://localhost:%HELPER_PORT%/ping
+)
 if defined JOSM_PATH (
     echo    JOSM:    Running
 ) else (
     echo    JOSM:    Not found
 )
 echo  ==========================================
+if %HELPER_VERIFIED% EQU 0 (
+    echo.
+    echo    [!] IMPORTANT: Helper verification failed!
+    echo    Export to JOSM will download files instead of direct transfer.
+    echo    Please check the "JOSM Helper" window for error messages.
+    echo.
+    echo    For troubleshooting help, see: TROUBLESHOOTING_HELPER.md
+    echo    Or test manually: http://localhost:%HELPER_PORT%/ping
+    echo.
+)
 echo.
 pause
 exit /b 0
