@@ -189,6 +189,19 @@ if not defined JOSM_PATH (
     if exist "%JOSM_CHECK%" set "JOSM_PATH=%JOSM_CHECK%"
 )
 
+if not defined JOSM_PATH (
+    set "JOSM_CHECK=%SCRIPT_DIR%josm-setup.exe"
+    if exist "%JOSM_CHECK%" (
+        echo        Found JOSM installer in folder. Running installer...
+        echo        ^(No Java needed - installer includes Java^)
+        start "" "%JOSM_CHECK%"
+        echo        Please complete the installation, then run this script again.
+        timeout /t 3 /nobreak >NUL
+        set "JOSM_PATH=INSTALLING"
+        goto check_helper
+    )
+)
+
 if defined JOSM_PATH (
     echo        Found JOSM at: %JOSM_PATH%
     echo %JOSM_PATH% | find /I ".jar" >NUL
@@ -202,7 +215,10 @@ if defined JOSM_PATH (
             echo        JOSM started [OK]
         ) else (
             echo        [!] Java not found. Cannot start JOSM JAR file.
-            echo        Please install Java from: https://www.java.com/download/
+            echo        JAR files require Java Runtime Environment.
+            echo        Install Java from: https://www.java.com/download/
+            echo        Or download JOSM Windows installer instead:
+            echo        https://josm.openstreetmap.de/download/josm-setup.exe
         )
     ) else (
         echo        Starting JOSM...
@@ -211,38 +227,27 @@ if defined JOSM_PATH (
         echo        JOSM started [OK]
     )
 ) else (
-    echo        JOSM not found. Checking for Java...
-    where java >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        echo        Java found. Downloading JOSM...
+    echo        JOSM not found. Downloading JOSM Windows installer...
+        echo        ^(No Java needed - installer includes Java^)
         echo        Please wait...
         call :download_josm
         if %ERRORLEVEL% NEQ 0 (
             echo        [!] JOSM download failed - see error messages above
         )
-        if exist "%SCRIPT_DIR%josm-tested.jar" (
-            set "JOSM_PATH=%SCRIPT_DIR%josm-tested.jar"
-            echo        JOSM downloaded [OK]
-            echo        Starting JOSM...
-            start "" javaw -jar "%JOSM_PATH%"
-            timeout /t 5 /nobreak >NUL
-            echo        JOSM started [OK]
+        if exist "%SCRIPT_DIR%josm-setup.exe" (
+            echo        JOSM installer ready [OK]
+            echo        After installation completes, run this script again to start JOSM.
+            echo        The installer will place JOSM in: %USERPROFILE%\AppData\Local\JOSM\
+            timeout /t 3 /nobreak >NUL
         ) else (
-            echo        [!] Failed to download JOSM
-            echo        Please download manually from: https://josm.openstreetmap.de/
-            echo        Or install Java and try again.
+            echo        [!] Failed to download JOSM installer
+            echo        Please download manually from: https://josm.openstreetmap.de/download/josm-setup.exe
+            echo        The Windows installer includes Java - no separate Java installation needed!
+            echo.
+            echo        Note: The app will still work without JOSM.
+            echo        Export will download files instead of opening in JOSM.
         )
-    ) else (
-        echo        [!] Java not found. JOSM requires Java.
-        echo.
-        echo        To use JOSM, you need to:
-        echo        1. Install Java from: https://www.java.com/download/
-        echo        2. Run this script again - it will auto-download JOSM
-        echo.
-        echo        Note: JOSM cannot run without Java installed.
-        echo        The app will still work, but export will download files instead.
     )
-)
 
 :check_helper
 echo.
@@ -383,7 +388,13 @@ if %HELPER_VERIFIED% EQU 1 (
     echo            Test: http://localhost:%HELPER_PORT%/ping
 )
 if defined JOSM_PATH (
-    echo    JOSM:    Running
+    if "%JOSM_PATH%"=="INSTALLING" (
+        echo    JOSM:    Installing (check installer window)
+    ) else if "%JOSM_PATH%"=="RUNNING" (
+        echo    JOSM:    Running
+    ) else (
+        echo    JOSM:    Running
+    )
 ) else (
     echo    JOSM:    Not found
 )
@@ -452,10 +463,11 @@ if exist "%SCRIPT_DIR%python\python.exe" (
 
 :: Function to download JOSM
 :download_josm
-echo        Downloading JOSM JAR file...
-echo        ^(This may take a few minutes - ~50MB download^)
-set "JOSM_URL=https://josm.openstreetmap.de/download/josm-tested.jar"
-set "JOSM_FILE=%SCRIPT_DIR%josm-tested.jar"
+echo        Downloading JOSM Windows installer...
+echo        ^(This may take a few minutes - ~80MB download^)
+echo        Note: This version includes Java - no separate Java installation needed!
+set "JOSM_URL=https://josm.openstreetmap.de/download/josm-setup.exe"
+set "JOSM_FILE=%SCRIPT_DIR%josm-setup.exe"
 
 :: Check internet connectivity first
 echo        Checking internet connection...
@@ -471,7 +483,13 @@ echo        Downloading from: %JOSM_URL%
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $ProgressPreference = 'SilentlyContinue'; Write-Host 'Downloading...'; Invoke-WebRequest -Uri '%JOSM_URL%' -OutFile '%JOSM_FILE%' -ErrorAction Stop; Write-Host 'Download complete'; exit 0 } catch { Write-Host 'Download failed:'; Write-Host $_.Exception.Message; exit 1 }"
 
 if exist "%JOSM_FILE%" (
-    echo        JOSM downloaded successfully
+    echo        JOSM installer downloaded successfully
+    echo        Starting JOSM installer...
+    echo        ^(Please follow the installation wizard^)
+    echo        After installation, JOSM will be available without Java!
+    start "" "%JOSM_FILE%"
+    echo        Waiting for installation to complete...
+    echo        ^(You can close this window after JOSM is installed^)
     exit /b 0
 ) else (
     echo        [!] Download failed - check internet connection

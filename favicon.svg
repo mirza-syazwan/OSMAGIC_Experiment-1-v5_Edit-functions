@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <!-- Folded map background -->
+  <path d="M5 8 L15 5 L25 8 L35 5 L35 32 L25 35 L15 32 L5 35 Z" 
+        fill="url(#mapGradient)" stroke="currentColor" stroke-width="1.5"/>
+  <!-- Map fold lines -->
+  <path d="M15 5 L15 32" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <path d="M25 8 L25 35" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+  <!-- Road lines on map -->
+  <path d="M8 15 L22 15 M10 22 L20 22 M12 28 L18 28" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  <!-- Location pin -->
+  <path d="M28 10 C24 10 21 13 21 17 C21 22 28 28 28 28 C28 28 35 22 35 17 C35 13 32 10 28 10 Z" 
+        stroke="currentColor" stroke-width="1.5" fill="currentColor" opacity="0.8"/>
+  <circle cx="28" cy="17" r="3" fill="white"/>
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+</svg>
