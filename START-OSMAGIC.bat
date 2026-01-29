@@ -199,7 +199,37 @@ goto start_helper_process
 echo        Starting JOSM Helper on port %HELPER_PORT%...
 echo        (A new window will open - keep it open)
 echo        Using Python: %PYTHON_CMD%
-start "JOSM Helper" cmd /k "cd /d %SCRIPT_DIR% && echo ======================================== && echo   JOSM Helper Starting... && echo ======================================== && echo. && echo Using: %PYTHON_CMD% && echo Script: josm-helper.py && echo Port: %HELPER_PORT% && echo. && echo If you see errors below, please report them: && echo ======================================== && echo. && \"%PYTHON_CMD%\" josm-helper.py || (echo. && echo ERROR: Failed to start helper. && echo Check if Python is installed correctly. && echo Press any key to close... && pause >NUL)"
+
+:: Create a temporary batch file to start the helper (handles paths with spaces better)
+set "HELPER_START_BAT=%TEMP%\josm-helper-start-%RANDOM%.bat"
+(
+    echo @echo off
+    echo cd /d "%SCRIPT_DIR%"
+    echo echo ========================================
+    echo echo   JOSM Helper Starting...
+    echo echo ========================================
+    echo echo.
+    echo echo Using: %PYTHON_CMD%
+    echo echo Script: josm-helper.py
+    echo echo Port: %HELPER_PORT%
+    echo echo.
+    echo echo If you see errors below, please report them:
+    echo echo ========================================
+    echo echo.
+    echo "%PYTHON_CMD%" josm-helper.py
+    echo if errorlevel 1 (
+    echo     echo.
+    echo     echo ERROR: Failed to start helper.
+    echo     echo Check if Python is installed correctly.
+    echo     echo.
+    echo     echo Python path: %PYTHON_CMD%
+    echo     echo Script path: %SCRIPT_DIR%josm-helper.py
+    echo     echo.
+    echo     pause
+    echo )
+) > "%HELPER_START_BAT%"
+
+start "JOSM Helper" cmd /k ""%HELPER_START_BAT%""
 timeout /t 3 /nobreak >NUL
 
 :: Verify helper started with retries
@@ -237,11 +267,24 @@ echo        Browser opened [OK]
 
 :add_imagery
 echo.
-echo  [4/4] Adding OpenStreetMap Carto (Standard) imagery layer...
-echo        (Waiting 5 seconds for JOSM to fully initialize...)
-timeout /t 5 /nobreak >NUL
+echo  [4/4] Adding imagery layer to JOSM...
+echo        (Waiting 8 seconds for JOSM to fully initialize...)
+timeout /t 8 /nobreak >NUL
+
+:: Check if JOSM Remote Control is enabled
+echo        Checking JOSM Remote Control...
+powershell -NoProfile -NonInteractive -Command "$maxAttempts = 15; $attempt = 0; $josmReady = $false; while ($attempt -lt $maxAttempts -and -not $josmReady) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $josmReady = $true; Write-Host '        JOSM Remote Control is ready [OK]' } } catch { $attempt++; if ($attempt -lt $maxAttempts) { Start-Sleep -Milliseconds 500 } } } if (-not $josmReady) { Write-Host '        [!] JOSM Remote Control not responding'; Write-Host '        [!] Make sure JOSM is running and Remote Control is enabled'; Write-Host '        [!] Test: http://localhost:8111/version'; exit 1 }" 2>&1
+
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] Skipping imagery addition - JOSM Remote Control not available
+    goto end_imagery
+)
+
+:: Try multiple common imagery names
 echo        Attempting to add imagery layer...
-powershell -NoProfile -NonInteractive -Command "$maxAttempts = 10; $attempt = 0; $success = $false; while ($attempt -lt $maxAttempts -and -not $success) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $imageryId = [uri]::EscapeDataString('OpenStreetMap Carto (Standard)'); try { Invoke-WebRequest -Uri ('http://localhost:8111/imagery?id=' + $imageryId) -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null; $success = $true; Write-Host '        Imagery layer added [OK]' } catch { Write-Host '        [!] Could not add imagery layer (may already be added or Remote Control not enabled)' }; break } } catch { $attempt++; Start-Sleep -Milliseconds 500 } }" 2>&1
+powershell -NoProfile -NonInteractive -Command "$imageryNames = @('OpenStreetMap Carto (Standard)', 'Standard', 'OpenStreetMap', 'osm-carto'); $success = $false; foreach ($name in $imageryNames) { try { $imageryId = [uri]::EscapeDataString($name); $response = Invoke-WebRequest -Uri ('http://localhost:8111/imagery?id=' + $imageryId) -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host ('        Imagery layer added: ' + $name + ' [OK]'); $success = $true; break } } catch { } } if (-not $success) { Write-Host '        [!] Could not add imagery layer automatically'; Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
+
+:end_imagery
 
 echo.
 echo  ==========================================
