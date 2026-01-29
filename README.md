@@ -20,22 +20,23 @@ Before using OSMAGIC with full features, you need to install the following:
    - **Installation:** Run the installer and follow the prompts
    - **Verify:** Open Command Prompt and type `java -version`
 
-2. **Python 3.x** (Optional - Auto-downloaded if missing)
+2. **Python 3.x** (Required for JOSM Helper)
    - **Download:** https://www.python.org/downloads/
-   - **Why:** Required for JOSM Helper (enables direct export)
+   - **Why:** Required to run the JOSM Helper tool (enables direct export to JOSM)
    - **Installation:** 
      - ✅ Check "Add Python to PATH" during installation
      - ✅ Choose "Install for all users" (optional)
    - **Verify:** Open Command Prompt and type `python --version`
-   - **Note:** The batch file can auto-download portable Python if system Python is not found
+   - **Note:** The batch file can auto-download portable Python if system Python is not found, but manual installation is recommended
 
-3. **JOSM** (Optional - Auto-downloaded if missing)
+3. **JOSM** (Required for editing OSM data)
    - **Download:** https://josm.openstreetmap.de/
-   - **Why:** For editing OpenStreetMap data
-   - **Options:**
-     - **Installer:** Download Windows installer for full installation
-     - **Portable JAR:** Download `josm-tested.jar` (no installation needed)
-   - **Note:** The batch file can auto-download JOSM JAR if Java is installed
+   - **Why:** For editing OpenStreetMap data and receiving exports from OSMAGIC
+   - **Installation Options:**
+     - **Windows Installer (Recommended):** Download `josm-setup.exe` for full installation
+     - **Portable JAR:** Download `josm-tested.jar` (no installation needed, but requires Java)
+   - **Note:** The batch file can auto-download JOSM JAR if Java is installed, but manual installation is recommended
+   - **After Installation:** You must enable Remote Control (see setup steps below)
 
 ### Quick Installation Guide
 
@@ -93,18 +94,25 @@ python --version
 
 ### Option 1: Desktop Shortcut (Recommended - Full Features)
 
-1. **Ensure prerequisites are installed** (see above)
-   - Java (required)
-   - Python (optional - can be auto-downloaded)
-   - JOSM (optional - can be auto-downloaded)
+1. **Install prerequisites** (see above)
+   - ✅ **Java** (required - must be installed manually)
+   - ✅ **Python** (required for JOSM Helper - recommended to install manually)
+   - ✅ **JOSM** (required for editing - recommended to install manually)
 
-2. **Double-click `START-OSMAGIC.bat`**
-   - Automatically detects and downloads missing components
-   - Starts JOSM (if available)
-   - Starts JOSM Helper for direct export
+2. **Enable JOSM Remote Control** (required for direct export)
+   - Open JOSM → `Edit` → `Preferences` → `Remote Control`
+   - ✅ Check "Enable remote control"
+   - ✅ Check "Import data from URL" (if available)
+   - Click OK
+
+3. **Double-click `START-OSMAGIC.bat`**
+   - Automatically detects installed software
+   - Starts JOSM (if installed)
+   - Starts JOSM Helper (requires Python)
+   - Adds OpenStreetMap Carto imagery layer automatically
    - Opens the app in your browser
 
-3. **That's it!** Everything is ready to use.
+4. **That's it!** Everything is ready to use.
 
 ### Option 2: Online Only (No Setup)
 
@@ -152,11 +160,11 @@ python --version
 - ✅ **Java Runtime Environment (JRE)** - Must be installed manually
 - ✅ **Windows OS** - For `START-OSMAGIC.bat` (Mac/Linux users can use online version)
 
-**Optional (can be auto-downloaded):**
-- ⚠️ **Python 3.x** - Auto-downloaded as portable version if not found
-- ⚠️ **JOSM** - Auto-downloaded as JAR file if Java is installed
+**Required for JOSM Integration:**
+- ✅ **Python 3.x** - Required to run JOSM Helper tool (can be auto-downloaded as portable version if not found)
+- ✅ **JOSM** - Required for editing OSM data (can be auto-downloaded as JAR file if Java is installed)
 
-**Note:** The batch file will automatically download Python and JOSM if they're missing, but Java must be installed first.
+**Note:** The batch file will automatically download Python and JOSM if they're missing, but manual installation is recommended. After installing JOSM, you must enable Remote Control (see setup steps below).
 
 ### For Online Use Only:
 - ✅ **Modern web browser** (Chrome, Firefox, Edge, Safari)
@@ -184,10 +192,12 @@ python --version
 **Option B - Auto-Download (Easier for experienced users):**
 
 1. **Install Java only** (required - cannot be auto-downloaded)
-2. **Run `START-OSMAGIC.bat`** - It will automatically:
-   - Download portable Python if not found
-   - Download JOSM JAR if Java is installed
+2. **Install Python** (required for JOSM Helper - can be auto-downloaded but manual install recommended)
+3. **Run `START-OSMAGIC.bat`** - It will automatically:
+   - Download portable Python if not found (but manual installation is better)
+   - Download JOSM JAR if Java is installed (but manual installation is recommended)
    - Download `josm-helper.py` if missing
+4. **After JOSM is installed:** Enable Remote Control (see Step 2 above)
 
 **Common JOSM installation locations (if installed manually):**
 - `C:\Program Files\JOSM\`
@@ -197,22 +207,48 @@ python --version
 
 ### Step 2: Enable JOSM Remote Control
 
-1. **Open JOSM**
-2. **Go to:** Edit → Preferences → Remote Control
-3. **Enable:**
-   - ✅ "Enable remote control"
-   - ✅ "Import data from URL" (if available)
-4. **Port:** Keep default (8111) unless you have conflicts
-5. **Click OK**
+**⚠️ IMPORTANT: This step is required for OSMAGIC to work with JOSM!**
+
+Remote Control allows OSMAGIC to send data directly to JOSM. Without this enabled, you'll need to manually open exported files.
+
+**Steps to enable:**
+
+1. **Open JOSM** (if not already running)
+2. **Go to:** `Edit` → `Preferences` → `Remote Control`
+   - Or use keyboard shortcut: `Alt+E` → `P` → Click `Remote Control` in the left sidebar
+3. **Enable Remote Control:**
+   - ✅ Check the box: **"Enable remote control"**
+   - ✅ Check the box: **"Import data from URL"** (if available)
+4. **Port Settings:**
+   - Keep the default port: **8111** (unless you have conflicts)
+   - If port 8111 is already in use, change it and update OSMAGIC accordingly
+5. **Click `OK`** to save settings
+
+**Visual Guide:**
+```
+JOSM Menu → Edit → Preferences
+    ↓
+Left Sidebar → Click "Remote Control"
+    ↓
+Check "Enable remote control" ✅
+Check "Import data from URL" ✅ (if available)
+    ↓
+Click OK
+```
 
 ### Step 3: Test Connection
 
-Open in browser: `http://localhost:8111/version`
+After enabling Remote Control, verify it's working:
 
-You should see JOSM version information. If not:
+1. **Make sure JOSM is running**
+2. **Open in your browser:** `http://localhost:8111/version`
+3. **Expected result:** You should see JSON output with JOSM version information
+
+**If the test fails:**
 - Make sure JOSM is running
-- Check Remote Control is enabled
-- Verify port 8111 isn't blocked
+- Verify Remote Control is enabled (go back to Step 2)
+- Check that port 8111 isn't blocked by firewall
+- Try restarting JOSM after enabling Remote Control
 
 ## 📖 Usage Guide
 
@@ -357,17 +393,38 @@ The app is automatically deployed to GitHub Pages when you push to the `main` br
 
 ### JOSM Export Not Working
 
-1. **Check JOSM is running**
-2. **Verify Remote Control is enabled** (Edit → Preferences → Remote Control)
-3. **Test connection:** Open `http://localhost:8111/version`
+1. **Check JOSM is installed and running**
+   - If JOSM is not installed, download from: https://josm.openstreetmap.de/
+   - Make sure JOSM is actually running (check taskbar/system tray)
+
+2. **Verify Remote Control is enabled** 
+   - Open JOSM → `Edit` → `Preferences` → `Remote Control`
+   - ✅ Check "Enable remote control"
+   - ✅ Check "Import data from URL" (if available)
+   - Click OK and restart JOSM if needed
+
+3. **Test connection:** Open `http://localhost:8111/version` in browser
+   - Should show JOSM version JSON
+   - If not, Remote Control is not enabled or JOSM is not running
+
 4. **Check JOSM Helper:** Should be running on port 8001
-5. **Try manual export:** Download file and open in JOSM
+   - Look for "JOSM Helper" window
+   - Test: `http://localhost:8001/ping`
+
+5. **Check Python is installed** (required for JOSM Helper)
+   - Run `python --version` in Command Prompt
+   - If not found, install from: https://www.python.org/downloads/
+
+6. **Try manual export:** Download file and open in JOSM manually
 
 ### Helper Not Starting
 
 1. **Check Python is installed:** `python --version`
-   - If not found, the batch file should auto-download portable Python
-   - If auto-download fails, install Python manually from https://www.python.org/downloads/
+   - **Python is required** to run the JOSM Helper tool
+   - If not found, install Python manually from: https://www.python.org/downloads/
+     - ✅ Make sure to check "Add Python to PATH" during installation
+   - The batch file can auto-download portable Python, but manual installation is recommended
+   - If auto-download fails, install Python manually
 
 2. **Verify josm-helper.py exists** (or let batch file download it)
    - The batch file automatically downloads it from GitHub if missing
