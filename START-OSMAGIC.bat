@@ -103,9 +103,97 @@ if %ERRORLEVEL% EQU 0 (
     goto start_helper_process
 )
 
-echo        [!] Python not found. Please install Python.
-echo        JOSM Helper will not start.
-goto open_browser
+:: Check for portable Python in python\ folder
+if exist "%SCRIPT_DIR%python\python.exe" (
+    set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
+    goto start_helper_process
+)
+
+:: Check common Python installation locations
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
+    set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
+    goto start_helper_process
+)
+
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
+    set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
+    goto start_helper_process
+)
+
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" (
+    set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe"
+    goto start_helper_process
+)
+
+if exist "C:\Program Files\Python311\python.exe" (
+    set "PYTHON_CMD=C:\Program Files\Python311\python.exe"
+    goto start_helper_process
+)
+
+if exist "C:\Program Files\Python312\python.exe" (
+    set "PYTHON_CMD=C:\Program Files\Python312\python.exe"
+    goto start_helper_process
+)
+
+if exist "C:\Python311\python.exe" (
+    set "PYTHON_CMD=C:\Python311\python.exe"
+    goto start_helper_process
+)
+
+:: Python not found - offer to download
+echo        [!] Python not found.
+echo        Attempting to download portable Python...
+echo        (This requires internet connection and may take a few minutes)
+goto download_python
+
+:download_python
+echo        Checking internet connection...
+powershell -NoProfile -NonInteractive -Command "try { $response = Test-NetConnection -ComputerName www.python.org -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue; if ($response) { exit 0 } else { exit 1 } } catch { exit 1 }" >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] No internet connection detected
+    echo        [!] Cannot download Python automatically
+    echo        [!] Please install Python manually from: https://www.python.org/downloads/
+    echo        [!] JOSM Helper will not start.
+    goto open_browser
+)
+
+echo        Downloading Python embeddable package...
+echo        (This may take a few minutes - ~25MB download)
+
+set "PYTHON_VERSION=3.11.9"
+set "PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/python-%PYTHON_VERSION%-embed-amd64.zip"
+set "PYTHON_ZIP=%SCRIPT_DIR%python-temp.zip"
+set "PYTHON_DIR=%SCRIPT_DIR%python"
+
+powershell -NoProfile -ExecutionPolicy Bypass -NonInteractive -Command "try { Write-Host '        Downloading from:' '%PYTHON_URL%'; $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PYTHON_ZIP%' -UseBasicParsing -ErrorAction Stop; Write-Host '        Download complete'; exit 0 } catch { Write-Host '        Download failed:'; Write-Host $_.Exception.Message; exit 1 }" 2>&1
+
+if not exist "%PYTHON_ZIP%" (
+    echo        [!] Download failed - check internet connection
+    echo        [!] You can download manually from: %PYTHON_URL%
+    echo        [!] Extract to: python\ folder
+    echo        [!] JOSM Helper will not start.
+    goto open_browser
+)
+
+echo        Extracting Python...
+if not exist "%PYTHON_DIR%" mkdir "%PYTHON_DIR%"
+powershell -NoProfile -ExecutionPolicy Bypass -NonInteractive -Command "try { Expand-Archive -Path '%PYTHON_ZIP%' -DestinationPath '%PYTHON_DIR%' -Force; Remove-Item '%PYTHON_ZIP%' -Force; Write-Host '        Extraction complete'; exit 0 } catch { Write-Host '        Extraction failed:'; Write-Host $_.Exception.Message; exit 1 }" 2>&1
+
+if not exist "%PYTHON_DIR%\python.exe" (
+    echo        [!] Extraction failed
+    echo        [!] JOSM Helper will not start.
+    goto open_browser
+)
+
+:: Enable pip support (optional but helpful)
+if exist "%PYTHON_DIR%\python311._pth" (
+    echo        Enabling pip support...
+    powershell -NoProfile -NonInteractive -Command "try { $content = Get-Content '%PYTHON_DIR%\python311._pth' -Raw; if ($content -notmatch 'import site') { $content = $content + \"`r`nimport site`r`n\"; Set-Content '%PYTHON_DIR%\python311._pth' -Value $content -NoNewline } } catch { }" >NUL 2>&1
+)
+
+set "PYTHON_CMD=%PYTHON_DIR%\python.exe"
+echo        Portable Python downloaded [OK]
+goto start_helper_process
 
 :start_helper_process
 echo        Starting JOSM Helper on port %HELPER_PORT%...
