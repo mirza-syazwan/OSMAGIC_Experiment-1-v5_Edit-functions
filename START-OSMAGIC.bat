@@ -32,7 +32,7 @@ if exist "%USERPROFILE%\AppData\Local\JOSM\JOSM.exe" (
     start "" "%USERPROFILE%\AppData\Local\JOSM\JOSM.exe"
     set "JOSM_STARTED=1"
     timeout /t 2 /nobreak >NUL
-    goto check_helper
+    goto add_imagery
 )
 
 if exist "C:\Program Files\JOSM\josm.exe" (
@@ -40,7 +40,7 @@ if exist "C:\Program Files\JOSM\josm.exe" (
     start "" "C:\Program Files\JOSM\josm.exe"
     set "JOSM_STARTED=1"
     timeout /t 2 /nobreak >NUL
-    goto check_helper
+    goto add_imagery
 )
 
 if exist "%USERPROFILE%\AppData\Local\JOSM\josm.exe" (
@@ -48,7 +48,7 @@ if exist "%USERPROFILE%\AppData\Local\JOSM\josm.exe" (
     start "" "%USERPROFILE%\AppData\Local\JOSM\josm.exe"
     set "JOSM_STARTED=1"
     timeout /t 2 /nobreak >NUL
-    goto check_helper
+    goto add_imagery
 )
 
 if %JOSM_STARTED% EQU 0 (
@@ -64,7 +64,8 @@ timeout /t 3 /nobreak >NUL
 :add_imagery
 :: Check if JOSM Remote Control is accessible and add imagery
 echo        Adding OpenStreetMap Carto (Standard) imagery layer...
-powershell -NoProfile -NonInteractive -Command "$maxAttempts = 10; $attempt = 0; $success = $false; while ($attempt -lt $maxAttempts -and -not $success) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $imageryId = [uri]::EscapeDataString('OpenStreetMap Carto (Standard)'); try { Invoke-WebRequest -Uri \"http://localhost:8111/imagery?id=$imageryId\" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null; $success = $true; Write-Host '        Imagery layer added [OK]' } catch { Write-Host '        [!] Could not add imagery layer (may already be added)' }; break } } catch { $attempt++; Start-Sleep -Milliseconds 500 } }" 2>&1
+powershell -NoProfile -NonInteractive -Command "$maxAttempts = 10; $attempt = 0; $success = $false; while ($attempt -lt $maxAttempts -and -not $success) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $imageryId = [uri]::EscapeDataString('OpenStreetMap Carto (Standard)'); try { Invoke-WebRequest -Uri ('http://localhost:8111/imagery?id=' + $imageryId) -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null; $success = $true; Write-Host '        Imagery layer added [OK]' } catch { Write-Host '        [!] Could not add imagery layer (may already be added)' }; break } } catch { $attempt++; Start-Sleep -Milliseconds 500 } }" 2>&1
+timeout /t 1 /nobreak >NUL
 
 :check_helper
 echo.
