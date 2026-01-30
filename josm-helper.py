@@ -42,56 +42,84 @@ def focus_josm_window():
     """Find and bring JOSM window to foreground using Windows API"""
     try:
         user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         
         josm_hwnd = None
+        found_titles = []  # For debugging
         
         def enum_windows_callback(hwnd, lparam):
-            nonlocal josm_hwnd
+            nonlocal josm_hwnd, found_titles
             length = user32.GetWindowTextLengthW(hwnd)
             if length > 0:
                 buffer = ctypes.create_unicode_buffer(length + 1)
                 user32.GetWindowTextW(hwnd, buffer, length + 1)
-                title = buffer.value.lower()
+                title = buffer.value
+                title_lower = title.lower()
+                
+                # Debug: collect all window titles containing 'josm' or 'java'
+                if 'josm' in title_lower or 'java' in title_lower:
+                    found_titles.append(title)
                 
                 # Match various JOSM window title patterns
-                if ('josm' in title or 
-                    'java openstreetmap' in title or 
-                    'openstreetmap editor' in title or
-                    title.startswith('josm')):
+                # EXCLUDE helper windows and command prompts
+                if (('josm' in title_lower or 
+                     'java openstreetmap' in title_lower or 
+                     'openstreetmap editor' in title_lower) and
+                    'helper' not in title_lower and  # Exclude "JOSM Helper" window
+                    'cmd' not in title_lower and     # Exclude command prompt windows
+                    'command' not in title_lower):   # Exclude command prompt windows
                     if user32.IsWindowVisible(hwnd):
                         josm_hwnd = hwnd
+                        print(f"  -> Found JOSM window: {title}")
                         return False
             return True
         
         user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
         
+        if not josm_hwnd and found_titles:
+            print(f"  -> Found potential JOSM windows but not visible: {found_titles}")
+        
         if josm_hwnd:
             SW_RESTORE = 9
             SW_SHOW = 5
+            SW_SHOWMAXIMIZED = 3
+            SW_SHOWNORMAL = 1
             
-            # First, restore if minimized
+            # Get current foreground window to attach to its thread
+            current_foreground = user32.GetForegroundWindow()
+            current_thread = kernel32.GetCurrentThreadId()
+            foreground_thread = user32.GetWindowThreadProcessId(current_foreground, None) if current_foreground else None
+            
+            # First, restore if minimized and show
             user32.ShowWindow(josm_hwnd, SW_RESTORE)
             user32.ShowWindow(josm_hwnd, SW_SHOW)
             
-            # Bring to foreground using multiple methods for reliability
+            # Attach to foreground thread BEFORE trying to set foreground (critical for Windows security)
+            if foreground_thread and current_thread != foreground_thread:
+                try:
+                    user32.AttachThreadInput(current_thread, foreground_thread, True)
+                except:
+                    pass
+            
+            # Bring to foreground using multiple methods
             user32.BringWindowToTop(josm_hwnd)
             user32.SetForegroundWindow(josm_hwnd)
             user32.SetActiveWindow(josm_hwnd)
+            user32.SetFocus(josm_hwnd)
             
-            # Use thread attachment trick for stubborn windows
-            try:
-                current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
-                foreground_thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
-                if current_thread != foreground_thread:
-                    user32.AttachThreadInput(current_thread, foreground_thread, True)
-                    user32.SetForegroundWindow(josm_hwnd)
-                    user32.SetActiveWindow(josm_hwnd)
+            # Detach thread input
+            if foreground_thread and current_thread != foreground_thread:
+                try:
                     user32.AttachThreadInput(current_thread, foreground_thread, False)
-            except:
-                pass
+                except:
+                    pass
             
-            # Final attempt - flash window to get attention
+            # Try again after thread attachment
+            user32.BringWindowToTop(josm_hwnd)
+            user32.SetForegroundWindow(josm_hwnd)
+            
+            # Flash window to get attention (more aggressive)
             try:
                 FLASHW_STOP = 0
                 FLASHW_CAPTION = 1
@@ -100,27 +128,32 @@ def focus_josm_window():
                 FLASHW_TIMER = 4
                 FLASHW_TIMERNOFG = 12
                 
-                # Flash the window briefly
                 flashwinfo = FLASHWINFO()
                 flashwinfo.cbSize = ctypes.sizeof(FLASHWINFO)
                 flashwinfo.hwnd = josm_hwnd
                 flashwinfo.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG
-                flashwinfo.uCount = 1
-                flashwinfo.dwTimeout = 100
+                flashwinfo.uCount = 3  # Flash 3 times
+                flashwinfo.dwTimeout = 0  # Use default cursor blink rate
                 
-                # Try to call FlashWindowEx (may not be available on all Windows versions)
                 try:
                     user32.FlashWindowEx(ctypes.byref(flashwinfo))
                 except AttributeError:
-                    # FlashWindowEx not available, skip
-                    pass
+                    # FlashWindowEx not available, use simple FlashWindow
+                    user32.FlashWindow(josm_hwnd, True)
             except:
                 pass
             
+            print("  -> JOSM window focused")
             return True
+        else:
+            print(f"  -> JOSM window not found (searched {len(found_titles)} windows)")
+            if found_titles:
+                print(f"  -> Found windows: {found_titles}")
         return False
     except Exception as e:
-        print(f"Error focusing JOSM: {e}")
+        print(f"  -> Error focusing JOSM: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -160,14 +193,34 @@ class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_cors_headers()
             self.end_headers()
-            self.wfile.write(json.dumps({
+            result = {
                 'success': success,
                 'message': 'JOSM focused' if success else 'JOSM window not found'
+            }
+            self.wfile.write(json.dumps(result).encode())
+            # Message already printed by focus_josm_window()
+        
+        elif self.path == '/test-focus':
+            # Test endpoint to debug focus issues
+            import time
+            print("  -> Testing focus (will try 3 times)...")
+            results = []
+            for i in range(3):
+                success = focus_josm_window()
+                results.append(success)
+                if success:
+                    break
+                time.sleep(0.3)
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'success': any(results),
+                'attempts': results,
+                'message': 'JOSM focused' if any(results) else 'JOSM window not found after 3 attempts'
             }).encode())
-            if success:
-                print("  -> JOSM window focused")
-            else:
-                print("  -> JOSM window not found")
         
         elif self.path.startswith('/exports/'):
             # Serve exported OSM files

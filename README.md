@@ -10,17 +10,11 @@ No installation needed - just open in your browser and start editing!
 
 ## 📋 Prerequisites
 
-Before using OSMAGIC with full features, you need to install the following:
+**Note:** These are only needed if you want to use JOSM integration. For online-only use (without JOSM), you don't need any of these!
 
-### Required Software
+### Required Software (for JOSM Integration)
 
-1. **Java Runtime Environment (JRE)**
-   - **Download:** https://www.java.com/download/
-   - **Why:** Required to run JOSM
-   - **Installation:** Run the installer and follow the prompts
-   - **Verify:** Open Command Prompt and type `java -version`
-
-2. **Python 3.x** (Required for JOSM Helper)
+1. **Python 3.x** - Required for JOSM Helper (enables direct export to JOSM)
    - **Download:** https://www.python.org/downloads/
    - **Why:** Required to run the JOSM Helper tool (enables direct export to JOSM)
    - **Installation:** 
@@ -28,29 +22,23 @@ Before using OSMAGIC with full features, you need to install the following:
      - ✅ Choose "Install for all users" (optional)
    - **Verify:** Open Command Prompt and type `python --version`
    - **Note:** The batch file can auto-download portable Python if system Python is not found, but manual installation is recommended
+   - **Not needed if:** You're okay with downloading files and opening them manually in JOSM
 
-3. **JOSM** (Required for editing OSM data)
+2. **JOSM** - Required for editing OSM data directly
    - **Download:** https://josm.openstreetmap.de/
    - **Why:** For editing OpenStreetMap data and receiving exports from OSMAGIC
    - **Installation Options:**
      - **Windows Installer (Recommended):** Download `josm-setup.exe` for full installation
-     - **Portable JAR:** Download `josm-tested.jar` (no installation needed, but requires Java)
-   - **Note:** The batch file can auto-download JOSM JAR if Java is installed, but manual installation is recommended
+     - **Portable JAR:** Download `josm-tested.jar` (no installation needed)
+   - **Note:** The batch file can auto-download JOSM JAR automatically, but manual installation is recommended
    - **After Installation:** You must enable Remote Control (see setup steps below)
+   - **Not needed if:** You just want to edit GPS traces in the browser (export downloads files)
 
 ### Quick Installation Guide
 
 **For Windows users (recommended order):**
 
-1. **Install Java first:**
-   ```
-   → Visit: https://www.java.com/download/
-   → Download Java Runtime Environment
-   → Run installer
-   → Restart computer if prompted
-   ```
-
-2. **Install Python:**
+1. **Install Python:**
    ```
    → Visit: https://www.python.org/downloads/
    → Download Python 3.11 or newer
@@ -59,14 +47,14 @@ Before using OSMAGIC with full features, you need to install the following:
    → Click "Install Now"
    ```
 
-3. **Install JOSM (or let batch file download it):**
+2. **Install JOSM (or let batch file download it):**
    ```
-   Option A - Full Installation:
+   Option A - Full Installation (Recommended):
    → Visit: https://josm.openstreetmap.de/
-   → Download Windows installer
+   → Download Windows installer (josm-setup.exe)
    → Run installer
    
-   Option B - Portable (Recommended):
+   Option B - Portable:
    → Let START-OSMAGIC.bat download it automatically
    → Or download josm-tested.jar manually
    ```
@@ -76,10 +64,6 @@ Before using OSMAGIC with full features, you need to install the following:
 After installation, verify everything works:
 
 ```bash
-# Check Java
-java -version
-# Should show: java version "X.X.X"
-
 # Check Python
 python --version
 # Should show: Python 3.X.X
@@ -88,14 +72,15 @@ python --version
 # Open JOSM and go to Help → About
 ```
 
-**Note:** If you don't want to install these manually, the `START-OSMAGIC.bat` file can automatically download Python (portable) and JOSM (JAR) for you. However, **Java must be installed manually** as it's required by the operating system.
+**Important Notes:**
+- **If you don't want JOSM:** You don't need Python or JOSM - just use the online version!
+- The `START-OSMAGIC.bat` file can automatically download Python (portable) and JOSM (JAR) for you
 
 ## 🚀 Quick Start
 
 ### Option 1: Desktop Shortcut (Recommended - Full Features)
 
 1. **Install prerequisites** (see above)
-   - ✅ **Java** (required - must be installed manually)
    - ✅ **Python** (required for JOSM Helper - recommended to install manually)
    - ✅ **JOSM** (required for editing - recommended to install manually)
 
@@ -156,13 +141,14 @@ python --version
 
 ### For Full Features (with JOSM integration):
 
-**Required:**
-- ✅ **Java Runtime Environment (JRE)** - Must be installed manually
+**Required (only if using JOSM integration):**
 - ✅ **Windows OS** - For `START-OSMAGIC.bat` (Mac/Linux users can use online version)
 
 **Required for JOSM Integration:**
 - ✅ **Python 3.x** - Required to run JOSM Helper tool (can be auto-downloaded as portable version if not found)
-- ✅ **JOSM** - Required for editing OSM data (can be auto-downloaded as JAR file if Java is installed)
+- ✅ **JOSM** - Required for editing OSM data (can be auto-downloaded automatically)
+
+**Note:** If you don't want to use JOSM, you don't need any of these! Just use the online version.
 
 **Note:** The batch file will automatically download Python and JOSM if they're missing, but manual installation is recommended. After installing JOSM, you must enable Remote Control (see setup steps below).
 
@@ -177,27 +163,22 @@ python --version
 
 **Option A - Manual Installation (Recommended for first-time users):**
 
-1. **Install Java:**
-   - Download from: https://www.java.com/download/
-   - Run installer and follow prompts
-
-2. **Install Python:**
+1. **Install Python:**
    - Download from: https://www.python.org/downloads/
    - ✅ Check "Add Python to PATH" during installation
 
-3. **Install JOSM:**
+2. **Install JOSM:**
    - Download from: https://josm.openstreetmap.de/
-   - Choose Windows installer or portable JAR file
+   - Choose Windows installer (recommended) or portable JAR file
 
 **Option B - Auto-Download (Easier for experienced users):**
 
-1. **Install Java only** (required - cannot be auto-downloaded)
-2. **Install Python** (required for JOSM Helper - can be auto-downloaded but manual install recommended)
-3. **Run `START-OSMAGIC.bat`** - It will automatically:
+1. **Install Python** (required for JOSM Helper - can be auto-downloaded but manual install recommended)
+2. **Run `START-OSMAGIC.bat`** - It will automatically:
    - Download portable Python if not found (but manual installation is better)
-   - Download JOSM JAR if Java is installed (but manual installation is recommended)
+   - Download JOSM JAR automatically (but manual installation is recommended)
    - Download `josm-helper.py` if missing
-4. **After JOSM is installed:** Enable Remote Control (see Step 2 above)
+3. **After JOSM is installed:** Enable Remote Control (see Step 2 above)
 
 **Common JOSM installation locations (if installed manually):**
 - `C:\Program Files\JOSM\`
@@ -300,8 +281,7 @@ After enabling Remote Control, verify it's working:
 
 **To use OSMAGIC on another computer:**
 
-1. **On the target computer, install prerequisites first:**
-   - ✅ **Java** (required) - Download from https://www.java.com/download/
+1. **On the target computer, install prerequisites first (only if using JOSM):**
    - ⚠️ **Python** (optional) - Can be auto-downloaded by batch file
    - ⚠️ **JOSM** (optional) - Can be auto-downloaded by batch file
 
@@ -312,17 +292,14 @@ After enabling Remote Control, verify it's working:
 3. **Run `START-OSMAGIC.bat`:**
    - Automatically detects installed software
    - Downloads Python (portable) if not found
-   - Downloads JOSM (JAR) if Java is installed but JOSM is missing
+   - Downloads JOSM (JAR) automatically if missing
    - Downloads `josm-helper.py` if missing
    - Starts everything and opens the app
 
 **What gets auto-downloaded:**
 - ✅ Python (portable version, no installation needed)
-- ✅ JOSM JAR file (if Java is installed)
+- ✅ JOSM JAR file (automatically)
 - ✅ `josm-helper.py` (if missing)
-
-**What must be installed manually:**
-- ⚠️ **Java** - Must be installed first (large installer, requires admin rights)
 
 **Or use online version (no setup):**
 - Just open: https://mirza-syazwan.github.io/OSMAGIC_Experiment-1-v5_Edit-functions/
@@ -443,15 +420,9 @@ The app is automatically deployed to GitHub Pages when you push to the `main` br
 - Make sure you have write permissions in the script directory
 
 **JOSM download failed:**
-- Ensure Java is installed first (required for JOSM)
 - Check internet connection
 - Try downloading JOSM manually from https://josm.openstreetmap.de/
 - Place `josm-tested.jar` in the same folder as `START-OSMAGIC.bat`
-
-**Java not found:**
-- Java must be installed manually (cannot be auto-downloaded)
-- Download from: https://www.java.com/download/
-- After installing Java, restart the batch file to auto-download JOSM
 
 ### Theme Not Changing
 

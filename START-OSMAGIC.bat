@@ -88,28 +88,37 @@ if not exist "%SCRIPT_DIR%josm-helper.py" (
 set "PYTHON_CMD="
 
 :: Check common Python installation locations FIRST
-:: Check Python311 FIRST (user's actual Python)
+:: Check Python311 FIRST (user's actual Python) - MUST verify it works
 if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
     "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" --version >NUL 2>&1
     if %ERRORLEVEL% EQU 0 (
-        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
-        goto start_helper_process
+        "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" -c "import sys" >NUL 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
+            goto start_helper_process
+        )
     )
 )
 
 if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
     "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" --version >NUL 2>&1
     if %ERRORLEVEL% EQU 0 (
-        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
-        goto start_helper_process
+        "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" -c "import sys" >NUL 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
+            goto start_helper_process
+        )
     )
 )
 
 if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" (
     "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" --version >NUL 2>&1
     if %ERRORLEVEL% EQU 0 (
-        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe"
-        goto start_helper_process
+        "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" -c "import sys" >NUL 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe"
+            goto start_helper_process
+        )
     )
 )
 
@@ -253,9 +262,34 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%HELPER_PORT% ^| findstr LIS
     timeout /t 1 /nobreak >NUL
 )
 
-:: Use cmd /k with proper path handling
-:: Ensure Python path and script path are properly quoted
-start "JOSM Helper" cmd /k "cd /d \"%SCRIPT_DIR%\" && echo ======================================== && echo   JOSM Helper Starting... && echo ======================================== && echo. && echo Using: %PYTHON_CMD% && echo Script: josm-helper.py && echo Port: %HELPER_PORT% && echo. && echo If you see errors below, please report them: && echo ======================================== && echo. && \"%PYTHON_CMD%\" \"%SCRIPT_DIR%josm-helper.py\" || (echo. && echo ERROR: Failed to start helper. && echo. && echo Python: %PYTHON_CMD% && echo Script: %SCRIPT_DIR%josm-helper.py && echo. && echo Try running manually: && echo   \"%PYTHON_CMD%\" \"%SCRIPT_DIR%josm-helper.py\" && echo. && pause)"
+:: Create launcher batch file to avoid path quoting issues
+set "LAUNCHER_BAT=%SCRIPT_DIR%_start-helper.bat"
+(
+    echo @echo off
+    echo cd /d "%~dp0"
+    echo echo ========================================
+    echo echo   JOSM Helper Starting...
+    echo echo ========================================
+    echo echo.
+    echo echo Using: %PYTHON_CMD%
+    echo echo Script: josm-helper.py
+    echo echo Port: %HELPER_PORT%
+    echo echo.
+    echo echo If you see errors below, please report them:
+    echo echo ========================================
+    echo echo.
+    echo "%PYTHON_CMD%" josm-helper.py
+    echo if errorlevel 1 (
+    echo     echo.
+    echo     echo ERROR: Failed to start helper
+    echo     echo Python: %PYTHON_CMD%
+    echo     echo Script: %SCRIPT_DIR%josm-helper.py
+    echo     echo.
+    echo     pause
+    echo )
+) > "%LAUNCHER_BAT%"
+
+start "JOSM Helper" cmd /k "%LAUNCHER_BAT%"
 timeout /t 4 /nobreak >NUL
 
 :: Verify helper started with retries (increased attempts)
@@ -309,9 +343,9 @@ if %ERRORLEVEL% NEQ 0 (
     goto end_imagery
 )
 
-:: Try multiple common imagery names
+:: Add imagery layer using the 'standard' ID (confirmed working)
 echo        Attempting to add imagery layer...
-powershell -NoProfile -NonInteractive -Command "$imageryNames = @('OpenStreetMap Carto (Standard)', 'Standard', 'OpenStreetMap', 'osm-carto'); $success = $false; foreach ($name in $imageryNames) { try { $imageryId = [uri]::EscapeDataString($name); $response = Invoke-WebRequest -Uri ('http://localhost:8111/imagery?id=' + $imageryId) -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host ('        Imagery layer added: ' + $name + ' [OK]'); $success = $true; break } } catch { } } if (-not $success) { Write-Host '        [!] Could not add imagery layer automatically'; Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
+powershell -NoProfile -NonInteractive -Command "try { $escapedId = [uri]::EscapeDataString('standard'); $uri = 'http://localhost:8111/imagery?id=' + $escapedId; $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host '        Imagery layer added: standard [OK]' } } catch { Write-Host '        [!] Could not add imagery layer automatically'; Write-Host ('        [!] Error: ' + $_.Exception.Message); Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
 
 :end_imagery
 
