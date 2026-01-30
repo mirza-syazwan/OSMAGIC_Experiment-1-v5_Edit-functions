@@ -331,12 +331,11 @@ echo        Browser opened [OK]
 :add_imagery
 echo.
 echo  [4/4] Adding imagery layer to JOSM...
-echo        (Waiting 8 seconds for JOSM to fully initialize...)
-timeout /t 8 /nobreak >NUL
+echo        (Waiting for JOSM to fully initialize...)
 
-:: Check if JOSM Remote Control is enabled
+:: Check if JOSM Remote Control is enabled (with longer wait time - up to 30 seconds)
 echo        Checking JOSM Remote Control...
-powershell -NoProfile -NonInteractive -Command "$maxAttempts = 15; $attempt = 0; $josmReady = $false; while ($attempt -lt $maxAttempts -and -not $josmReady) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $josmReady = $true; Write-Host '        JOSM Remote Control is ready [OK]' } } catch { $attempt++; if ($attempt -lt $maxAttempts) { Start-Sleep -Milliseconds 500 } } } if (-not $josmReady) { Write-Host '        [!] JOSM Remote Control not responding'; Write-Host '        [!] Make sure JOSM is running and Remote Control is enabled'; Write-Host '        [!] Test: http://localhost:8111/version'; exit 1 }" 2>&1
+powershell -NoProfile -NonInteractive -Command "$maxAttempts = 60; $attempt = 0; $josmReady = $false; while ($attempt -lt $maxAttempts -and -not $josmReady) { try { $response = Invoke-WebRequest -Uri 'http://localhost:8111/version' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { $josmReady = $true; Write-Host '        JOSM Remote Control is ready [OK]' } } catch { $attempt++; if ($attempt -lt $maxAttempts) { Start-Sleep -Milliseconds 500 } } } if (-not $josmReady) { Write-Host '        [!] JOSM Remote Control not responding'; Write-Host '        [!] Make sure JOSM is running and Remote Control is enabled'; Write-Host '        [!] Test: http://localhost:8111/version'; exit 1 }" 2>&1
 
 if %ERRORLEVEL% NEQ 0 (
     echo        [!] Skipping imagery addition - JOSM Remote Control not available
@@ -345,7 +344,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: Add imagery layer using the 'standard' ID (confirmed working)
 echo        Attempting to add imagery layer...
-powershell -NoProfile -NonInteractive -Command "try { $escapedId = [uri]::EscapeDataString('standard'); $uri = 'http://localhost:8111/imagery?id=' + $escapedId; $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host '        Imagery layer added: standard [OK]' } } catch { Write-Host '        [!] Could not add imagery layer automatically'; Write-Host ('        [!] Error: ' + $_.Exception.Message); Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
+powershell -NoProfile -NonInteractive -Command "try { $escapedId = [uri]::EscapeDataString('standard'); $uri = 'http://localhost:8111/imagery?id=' + $escapedId; $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host '        Imagery layer added: standard [OK]' } } catch { $errMsg = $_.Exception.Message; Write-Host '        [!] Could not add imagery layer automatically'; Write-Host ('        [!] Error: ' + $errMsg); Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
 
 :end_imagery
 
