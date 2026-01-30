@@ -142,8 +142,8 @@ class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
     
     def do_GET(self):
-        if self.path == '/ping':
-            # Health check endpoint
+        if self.path == '/' or self.path == '/ping':
+            # Health check endpoint (support both / and /ping)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_cors_headers()
@@ -242,28 +242,92 @@ class JOSMHelperHandler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    
-    print()
-    print("=" * 50)
-    print("  JOSM Helper - OSMAGIC Integration")
-    print("=" * 50)
-    print()
-    print(f"  Helper running on: http://localhost:{HELPER_PORT}")
-    print(f"  Export directory:  {EXPORT_DIR}")
-    print()
-    print("  This helper enables 'Export to JOSM' from")
-    print("  GitHub Pages or any hosted version of OSMAGIC.")
-    print()
-    print("  Press Ctrl+C to stop")
-    print("=" * 50)
-    print()
-    
-    with socketserver.TCPServer(("", HELPER_PORT), JOSMHelperHandler) as httpd:
+    httpd = None
+    try:
+        # Change to script directory first
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(script_dir)
+        
+        print()
+        print("=" * 50)
+        print("  JOSM Helper - OSMAGIC Integration")
+        print("=" * 50)
+        print()
+        print(f"  Helper running on: http://localhost:{HELPER_PORT}")
+        print(f"  Export directory:  {EXPORT_DIR}")
+        print(f"  Script directory:  {script_dir}")
+        print()
+        print("  This helper enables 'Export to JOSM' from")
+        print("  GitHub Pages or any hosted version of OSMAGIC.")
+        print()
+        print("  Press Ctrl+C to stop")
+        print("=" * 50)
+        print()
+        
+        # Ensure exports directory exists
         try:
+            if not os.path.exists(EXPORT_DIR):
+                os.makedirs(EXPORT_DIR)
+                print(f"  Created exports directory: {EXPORT_DIR}")
+        except Exception as e:
+            print(f"  [!] Warning: Could not create exports directory: {e}")
+        
+        # Try to bind to the port with better error handling
+        try:
+            # Use allow_reuse_address to handle TIME_WAIT states
+            socketserver.TCPServer.allow_reuse_address = True
+            httpd = socketserver.TCPServer(("", HELPER_PORT), JOSMHelperHandler)
+            print(f"  Server bound to port {HELPER_PORT} [OK]")
+            print(f"  Listening for connections...")
+            print(f"  Test: http://localhost:{HELPER_PORT}/ping")
+            print()
+            
+            # Start serving - this blocks until interrupted
             httpd.serve_forever()
+            
+        except OSError as e:
+            error_msg = str(e)
+            if "Address already in use" in error_msg or "Only one usage of each socket address" in error_msg or "WinError 10048" in error_msg:
+                print(f"  [!] ERROR: Port {HELPER_PORT} is already in use!")
+                print(f"  [!] Another application may be using this port.")
+                print(f"  [!] Solution:")
+                print(f"      1. Close any other JOSM Helper windows")
+                print(f"      2. Wait a few seconds for port to be released")
+                print(f"      3. Or change HELPER_PORT in josm-helper.py")
+                print()
+                print(f"  To find what's using the port, run:")
+                print(f"      netstat -ano | findstr :{HELPER_PORT}")
+            else:
+                print(f"  [!] ERROR: Failed to bind to port {HELPER_PORT}")
+                print(f"  [!] Error: {error_msg}")
+            raise
         except KeyboardInterrupt:
-            print("\n\nJOSM Helper stopped.")
+            print("\n\n  JOSM Helper stopped by user.")
+        except Exception as e:
+            print(f"\n  [!] Server error: {e}")
+            print(f"  [!] Error type: {type(e).__name__}")
+            raise
+        finally:
+            if httpd:
+                try:
+                    httpd.server_close()
+                    print("  Server closed.")
+                except:
+                    pass
+                    
+    except Exception as e:
+        print(f"\n  [!] FATAL ERROR: {e}")
+        print(f"  [!] Error type: {type(e).__name__}")
+        import traceback
+        print("\n  Full error details:")
+        traceback.print_exc()
+        print("\n" + "=" * 50)
+        print("  Press any key to exit...")
+        try:
+            input()
+        except:
+            pass
+        raise
 
 
 if __name__ == "__main__":

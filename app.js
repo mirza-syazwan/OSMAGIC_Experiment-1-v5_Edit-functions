@@ -1911,35 +1911,45 @@ class TaskManager {
             
             console.log('✅ JOSM import request sent');
             
+            // Focus JOSM window IMMEDIATELY (before waiting for import to complete)
+            // This ensures JOSM comes to foreground right away
+            console.log('🎯 Step 4: Focusing JOSM window immediately...');
+            await this.blurBrowserForJOSM();
+            
             // Wait for JOSM to load the data (longer delay to ensure import completes)
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Focus again after a moment (Windows sometimes needs multiple attempts)
+            console.log('🎯 Focusing JOSM window again...');
+            await this.blurBrowserForJOSM();
             
             // Clean up iframe
             document.body.removeChild(iframe);
             
-            // Zoom JOSM to the loaded data
+            // Wait a bit more for import to fully complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Zoom JOSM to the loaded data (optional - skip if it fails)
             try {
+                // Try zoom endpoint - if it fails, that's OK, data is already loaded
                 const zoomIframe = document.createElement('iframe');
                 zoomIframe.style.display = 'none';
-                zoomIframe.src = 'http://localhost:8111/zoom?mode=download';
+                zoomIframe.src = 'http://localhost:8111/zoom';
                 document.body.appendChild(zoomIframe);
-                setTimeout(() => document.body.removeChild(zoomIframe), 500);
+                setTimeout(() => {
+                    try {
+                        document.body.removeChild(zoomIframe);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }, 500);
             } catch (error) {
-                console.warn('Failed to zoom JOSM:', error);
+                // Zoom is optional - data is already loaded, so ignore errors
+                console.log('ℹ️ Zoom skipped (optional feature)');
             }
             
-            // Focus JOSM window after data is loaded (with multiple attempts for reliability)
-            console.log('🎯 Step 5: Focusing JOSM window...');
-            
-            // Try focusing immediately
-            await this.blurBrowserForJOSM();
-            
-            // Wait a bit and try again (sometimes Windows needs a moment)
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await this.blurBrowserForJOSM();
-            
-            // One more time after a short delay to ensure it sticks
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Final focus attempt to ensure JOSM stays in foreground
+            console.log('🎯 Final focus attempt...');
             await this.blurBrowserForJOSM();
             
             console.log('✅ Export complete! Data sent to JOSM.');

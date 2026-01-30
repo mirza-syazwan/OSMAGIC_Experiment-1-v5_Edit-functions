@@ -84,35 +84,70 @@ if not exist "%SCRIPT_DIR%josm-helper.py" (
 )
 
 :: Find Python command
+:: Check full paths FIRST (more reliable than PATH commands)
 set "PYTHON_CMD="
-python --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set "PYTHON_CMD=python"
-    goto start_helper_process
+
+:: Check common Python installation locations FIRST
+:: Check Python311 FIRST (user's actual Python)
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
+    "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" --version >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
+        goto start_helper_process
+    )
 )
 
-python3 --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set "PYTHON_CMD=python3"
-    goto start_helper_process
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
+    "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" --version >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
+        goto start_helper_process
+    )
 )
 
-py --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set "PYTHON_CMD=py"
-    goto start_helper_process
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" (
+    "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" --version >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe"
+        goto start_helper_process
+    )
 )
 
 :: Check for portable Python in python\ folder
 if exist "%SCRIPT_DIR%python\python.exe" (
-    set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
-    goto start_helper_process
+    "%SCRIPT_DIR%python\python.exe" --version >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=%SCRIPT_DIR%python\python.exe"
+        goto start_helper_process
+    )
 )
 
-:: Check common Python installation locations
-if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
-    set "PYTHON_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
-    goto start_helper_process
+:: Now check PATH commands (less reliable)
+python --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    python -c "import sys" >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=python"
+        goto start_helper_process
+    )
+)
+
+python3 --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    python3 -c "import sys" >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=python3"
+        goto start_helper_process
+    )
+)
+
+py --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    py -c "import sys" >NUL 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON_CMD=py"
+        goto start_helper_process
+    )
 )
 
 if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
@@ -200,47 +235,41 @@ echo        Starting JOSM Helper on port %HELPER_PORT%...
 echo        (A new window will open - keep it open)
 echo        Using Python: %PYTHON_CMD%
 
-:: Create a temporary batch file to start the helper (handles paths with spaces better)
-set "HELPER_START_BAT=%TEMP%\josm-helper-start-%RANDOM%.bat"
-(
-    echo @echo off
-    echo cd /d "%SCRIPT_DIR%"
-    echo echo ========================================
-    echo echo   JOSM Helper Starting...
-    echo echo ========================================
-    echo echo.
-    echo echo Using: %PYTHON_CMD%
-    echo echo Script: josm-helper.py
-    echo echo Port: %HELPER_PORT%
-    echo echo.
-    echo echo If you see errors below, please report them:
-    echo echo ========================================
-    echo echo.
-    echo "%PYTHON_CMD%" josm-helper.py
-    echo if errorlevel 1 (
-    echo     echo.
-    echo     echo ERROR: Failed to start helper.
-    echo     echo Check if Python is installed correctly.
-    echo     echo.
-    echo     echo Python path: %PYTHON_CMD%
-    echo     echo Script path: %SCRIPT_DIR%josm-helper.py
-    echo     echo.
-    echo     pause
-    echo )
-) > "%HELPER_START_BAT%"
+:: Verify Python actually works before starting
+echo        Verifying Python works...
+"%PYTHON_CMD%" --version >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        [!] ERROR: Python at %PYTHON_CMD% does not work!
+    echo        [!] Please check if Python is installed correctly
+    goto open_browser
+)
 
-start "JOSM Helper" cmd /k ""%HELPER_START_BAT%""
-timeout /t 3 /nobreak >NUL
+:: Kill any existing helper processes on port 8001 first
+echo        Checking for existing helper processes...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%HELPER_PORT% ^| findstr LISTENING') do (
+    echo        Found process using port %HELPER_PORT%: PID %%a
+    echo        Attempting to close it...
+    taskkill /PID %%a /F >NUL 2>&1
+    timeout /t 1 /nobreak >NUL
+)
 
-:: Verify helper started with retries
+:: Use cmd /k with proper path handling
+:: Ensure Python path and script path are properly quoted
+start "JOSM Helper" cmd /k "cd /d \"%SCRIPT_DIR%\" && echo ======================================== && echo   JOSM Helper Starting... && echo ======================================== && echo. && echo Using: %PYTHON_CMD% && echo Script: josm-helper.py && echo Port: %HELPER_PORT% && echo. && echo If you see errors below, please report them: && echo ======================================== && echo. && \"%PYTHON_CMD%\" \"%SCRIPT_DIR%josm-helper.py\" || (echo. && echo ERROR: Failed to start helper. && echo. && echo Python: %PYTHON_CMD% && echo Script: %SCRIPT_DIR%josm-helper.py && echo. && echo Try running manually: && echo   \"%PYTHON_CMD%\" \"%SCRIPT_DIR%josm-helper.py\" && echo. && pause)"
+timeout /t 4 /nobreak >NUL
+
+:: Verify helper started with retries (increased attempts)
 echo        Waiting for helper to initialize...
 set "HELPER_STARTED=0"
-for /L %%i in (1,1,10) do (
+for /L %%i in (1,1,15) do (
     timeout /t 1 /nobreak >NUL
-    powershell -NoProfile -NonInteractive -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:%HELPER_PORT%/ping' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >NUL 2>&1
+    powershell -NoProfile -NonInteractive -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:%HELPER_PORT%/ping' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >NUL 2>&1
     if %ERRORLEVEL% EQU 0 (
         set "HELPER_STARTED=1"
         goto helper_verified
+    )
+    if %%i EQU 5 (
+        echo        Still waiting... (attempt %%i/15)
     )
 )
 
