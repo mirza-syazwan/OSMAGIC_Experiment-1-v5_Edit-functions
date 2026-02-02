@@ -344,7 +344,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: Add imagery layer using the 'standard' ID (confirmed working)
 echo        Attempting to add imagery layer...
-powershell -NoProfile -NonInteractive -Command "try { $escapedId = [uri]::EscapeDataString('standard'); $uri = 'http://localhost:8111/imagery?id=' + $escapedId; $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host '        Imagery layer added: standard [OK]' } } catch { $errMsg = $_.Exception.Message; Write-Host '        [!] Could not add imagery layer automatically'; Write-Host ('        [!] Error: ' + $errMsg); Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
+powershell -NoProfile -NonInteractive -Command "try { $escapedId = [uri]::EscapeDataString('standard'); $uri = 'http://localhost:8111/imagery?id=' + $escapedId; $response = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop; if ($response.StatusCode -eq 200) { Write-Host '        Imagery layer added: standard [OK]' } } catch { Write-Host '        [!] Could not add imagery layer automatically'; Write-Host '        [!] You can add it manually in JOSM: Imagery menu' }" 2>&1
 
 :end_imagery
 
